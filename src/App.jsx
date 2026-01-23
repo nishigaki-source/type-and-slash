@@ -1,9 +1,9 @@
 import React from 'react';
-import Game from './Game'; // Game.jsx (大文字) をインポートするように修正
+import Game from './Game';
 
 function App() {
   return (
-    <div className="w-full h-screen bg-black">
+    <div className="w-full h-screen bg-slate-50"> {/* bg-black から bg-slate-50 に変更 */}
       <Game />
     </div>
   );
