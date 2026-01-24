@@ -5,14 +5,16 @@ import { db, GAME_APP_ID } from '../../lib/firebase';
 import { generateId } from '../../utils/gameLogic';
 import { WORD_LISTS } from '../../constants/data';
 
-const LobbyScreen = ({ player, onJoinRoom, onBack, difficulty }) => {
+const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
   const [roomId, setRoomId] = useState('');
   const [mode, setMode] = useState('MENU');
   const [error, setError] = useState('');
   
-  // デフォルト名を指定
   const [hostName, setHostName] = useState('冒険者1');
   const [guestName, setGuestName] = useState('冒険者2');
+
+  // HP倍率の設定（ここを調整することで試合時間をコントロールできます）
+  const HP_MULTIPLIER = 30;
 
   const createRoom = async () => {
     if (!hostName) {
@@ -31,10 +33,11 @@ const LobbyScreen = ({ player, onJoinRoom, onBack, difficulty }) => {
       createdAt: Date.now(),
       difficulty: difficulty,
       player1: {
-        id: player.name, // 本人確認用IDは元の名前を使用
-        name: hostName,  // 表示名は入力値を使用
-        hp: player.stats.hp * 3,
-        maxHp: player.stats.hp * 3,
+        id: userId,
+        name: hostName,
+        // ★修正: HPを大幅に増やす
+        hp: player.stats.hp * HP_MULTIPLIER,
+        maxHp: player.stats.hp * HP_MULTIPLIER,
         word: p1Word,
         race: player.race,
         job: player.job,
@@ -80,10 +83,11 @@ const LobbyScreen = ({ player, onJoinRoom, onBack, difficulty }) => {
       const p2Word = wordList[Math.floor(Math.random() * wordList.length)];
 
       const player2Data = {
-        id: player.name, // 本人確認用ID
-        name: guestName, // 表示名
-        hp: player.stats.hp * 3,
-        maxHp: player.stats.hp * 3,
+        id: userId,
+        name: guestName,
+        // ★修正: 参加側もHPを大幅に増やす
+        hp: player.stats.hp * HP_MULTIPLIER,
+        maxHp: player.stats.hp * HP_MULTIPLIER,
         word: p2Word,
         race: player.race,
         job: player.job,

@@ -23,7 +23,6 @@ import ShopScreen from './components/screens/ShopScreen';
 import ClassChangeScreen from './components/screens/ClassChangeScreen';
 import BattleScreen from './components/screens/BattleScreen';
 import ResultModal from './components/ui/ResultModal';
-// 新規追加したマルチプレイ用コンポーネント
 import LobbyScreen from './components/screens/LobbyScreen';
 import MultiplayerBattleScreen from './components/screens/MultiplayerBattleScreen';
 
@@ -66,7 +65,6 @@ export default function TypingGame() {
   useEffect(() => {
     const loadData = async () => {
       if (fbUser && !isGuest) {
-        // Firestoreからロード
         try {
           const docRef = doc(db, 'artifacts', GAME_APP_ID, 'users', fbUser.uid, 'saveData', 'current');
           const docSnap = await getDoc(docRef);
@@ -77,7 +75,6 @@ export default function TypingGame() {
             setEquipped(data.equipped || { HEAD: null, BODY: null, FEET: null, ACCESSORY: null, WEAPON: null });
             setGameState('TITLE');
           } else {
-             // データなし -> キャラ作成へ
              setGameState('CHAR_CREATE');
           }
         } catch (e) {
@@ -85,7 +82,6 @@ export default function TypingGame() {
           setGameState('TITLE');
         }
       } else if (isGuest) {
-        // ゲストはメモリ上のみなので新規作成へ
         setGameState('CHAR_CREATE');
       }
     };
@@ -305,7 +301,6 @@ export default function TypingGame() {
      setGameState('INIT');
   };
 
-  // ロビーから対戦画面への遷移ハンドラ
   const handleJoinRoom = (roomId, role) => {
     setMultiplayerRoomId(roomId);
     setMultiplayerRole(role);
@@ -350,7 +345,6 @@ export default function TypingGame() {
           difficulty={difficulty} 
           setDifficulty={setDifficulty}
           onShowAuth={() => setShowAuth(true)}
-          // 新規追加: ロビー画面へ遷移
           onMultiplayer={() => setGameState('LOBBY')}
         />
       }
@@ -359,25 +353,26 @@ export default function TypingGame() {
       {gameState === 'SHOP' && player && <ShopScreen player={player} inventory={inventory} equipped={equipped} setPlayer={setPlayer} setInventory={setInventory} onBack={() => setGameState('TOWN')} shopItems={shopItems} onRefreshShop={setShopItems} />}
       {gameState === 'CLASS_CHANGE' && player && <ClassChangeScreen player={player} onChangeClass={handleChangeClass} onBack={() => setGameState('TOWN')} />}
       
-      {/* シングルプレイ用バトル画面 */}
       {gameState === 'BATTLE' && battleState && player && <BattleScreen battleState={battleState} setBattleState={setBattleState} player={player} equipped={equipped} inventory={inventory} setInventory={setInventory} onWin={handleWin} onLose={handleLose} difficulty={difficulty} />}
       
-      {/* 新規画面: ロビー */}
-      {gameState === 'LOBBY' && player && (
+      {/* 新規画面: ロビー (修正: userIdを渡す) */}
+      {gameState === 'LOBBY' && player && fbUser && (
         <LobbyScreen 
           player={player}
+          userId={fbUser.uid} // 一意なIDを渡す
           difficulty={difficulty}
           onJoinRoom={handleJoinRoom}
           onBack={() => setGameState('TITLE')}
         />
       )}
 
-      {/* 新規画面: マルチプレイ対戦 */}
-      {gameState === 'MULTI_BATTLE' && player && multiplayerRoomId && (
+      {/* 新規画面: マルチプレイ対戦 (修正: userIdを渡す) */}
+      {gameState === 'MULTI_BATTLE' && player && multiplayerRoomId && fbUser && (
         <MultiplayerBattleScreen 
           roomId={multiplayerRoomId}
           playerRole={multiplayerRole}
           player={player}
+          userId={fbUser.uid} // 一意なIDを渡す
           onFinish={() => setGameState('LOBBY')}
         />
       )}
