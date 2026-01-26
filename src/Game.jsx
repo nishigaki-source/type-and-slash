@@ -11,7 +11,10 @@ import {
   calcInitialStats, 
   growStats, 
   generateId, 
-  calculateEffectiveStats 
+  calculateEffectiveStats,
+  calculateScore,
+  calculateCPM,
+  getTodayString
 } from './utils/gameLogic';
 
 // 分割したコンポーネントをインポート
@@ -19,7 +22,6 @@ import AuthScreen from './components/screens/AuthScreen';
 import TitleScreen from './components/screens/TitleScreen';
 import CharCreateScreen from './components/screens/CharCreateScreen';
 import TownScreen from './components/screens/TownScreen';
-import ShopScreen from './components/screens/ShopScreen';
 import ClassChangeScreen from './components/screens/ClassChangeScreen';
 import BattleScreen from './components/screens/BattleScreen';
 import ResultModal from './components/ui/ResultModal';
@@ -73,6 +75,10 @@ export default function TypingGame() {
             setPlayer(data.player);
             setInventory(data.inventory || []);
             setEquipped(data.equipped || { HEAD: null, BODY: null, FEET: null, ACCESSORY: null, WEAPON: null });
+            // ロード時にショップアイテムがあれば復元、なければ後で生成
+            if (data.shopItems && data.shopItems.length > 0) {
+                setShopItems(data.shopItems);
+            }
             setGameState('TITLE');
           } else {
              setGameState('CHAR_CREATE');
@@ -95,7 +101,8 @@ export default function TypingGame() {
     if (player && fbUser && !isGuest) {
       const saveData = async () => {
         try {
-          const data = { player, inventory, equipped };
+          // shopItems もセーブデータに含めるように修正
+          const data = { player, inventory, equipped, shopItems };
           const docRef = doc(db, 'artifacts', GAME_APP_ID, 'users', fbUser.uid, 'saveData', 'current');
           await setDoc(docRef, data);
         } catch (e) {
@@ -104,19 +111,24 @@ export default function TypingGame() {
       };
       saveData();
     }
-  }, [player, inventory, equipped, fbUser, isGuest]);
+  }, [player, inventory, equipped, shopItems, fbUser, isGuest]);
 
-  const refreshShop = useCallback((currentShop = []) => {
+  // ショップ更新関数
+  const refreshShop = useCallback(() => {
      if(!player) return;
      const newItems = [];
-     newItems.push(generateConsumable());
-     newItems.push(generateConsumable());
+     // 消耗品を3つ生成
      for(let i=0; i<3; i++) {
+        newItems.push(generateConsumable());
+     }
+     // 装備品を5つ生成
+     for(let i=0; i<5; i++) {
         newItems.push(generateItem(player.level));
      }
      setShopItems(newItems);
   }, [player]);
 
+  // 初回タウン遷移時にショップが空なら商品を生成
   useEffect(() => {
      if(gameState === 'TOWN' && shopItems.length === 0 && player) {
          refreshShop();
@@ -127,11 +139,21 @@ export default function TypingGame() {
     const initialStats = calcInitialStats(formData.job, formData.race, formData.personality);
     const newPlayer = {
       name: formData.name, job: formData.job, race: formData.race, gender: formData.gender, personality: formData.personality,
-      level: 1, exp: 0, gold: 500, maxStage: 1, stats: initialStats
+      level: 1, exp: 0, gold: 500, maxStage: 1, stats: initialStats,
+      // 実績データの初期化
+      records: {
+        totalTypes: 0,
+        totalMiss: 0,
+        dungeonClears: 0,
+        missedWords: {},
+        missedKeys: {}, 
+        daily: {}
+      }
     };
     const initialWeapon = generateItem(1, formData.job);
     initialWeapon.type = 'WEAPON';
     initialWeapon.name = '初心者の' + (JOBS[formData.job].weapon);
+    initialWeapon.jobReq = [formData.job]; // 職制限
     
     const initialPotions = [
       generateConsumable(), generateConsumable(), generateConsumable()
@@ -140,17 +162,21 @@ export default function TypingGame() {
     setPlayer(newPlayer);
     setInventory([initialWeapon, ...initialPotions]);
     setEquipped(prev => ({ ...prev, WEAPON: initialWeapon }));
+    
     setGameState('TOWN');
   };
   
+  // ★修正箇所: 転職時に武器を増殖させない
   const handleChangeClass = (newJobId, cost) => {
     if (!player) return;
+    
+    // 1. コスト支払い
     const newGold = player.gold - cost;
-    const currentWeapon = equipped.WEAPON;
+    
+    // 2. 武器を外す (インベントリには既に存在するため、equippedステートをnullにするだけで良い)
     const newEquipped = { ...equipped, WEAPON: null };
-    const newInventory = [...inventory];
-    if (currentWeapon) newInventory.push(currentWeapon);
 
+    // 3. ステータス再計算
     let newStats = calcInitialStats(newJobId, player.race, player.personality);
     const levelsToGrow = player.level - 1;
     if (levelsToGrow > 0) {
@@ -158,15 +184,19 @@ export default function TypingGame() {
       newStats = growthResult.newStats;
     }
 
+    // 4. プレイヤー情報更新
     const newPlayer = { ...player, job: newJobId, gold: newGold, stats: newStats };
     setPlayer(newPlayer);
-    setInventory(newInventory);
     setEquipped(newEquipped);
+    // setInventory(newInventory); // インベントリの変更は不要
     setGameState('TOWN');
     alert(`${JOBS[newJobId].name} に転職しました！\nステータスが再計算されました。`);
   };
 
   const startBattle = (stage) => {
+    // 戦闘開始時にショップの商品を更新する
+    refreshShop();
+
     const eff = calculateEffectiveStats(player, equipped);
     const wordList = WORD_LISTS[difficulty];
     const enemies = [];
@@ -238,13 +268,48 @@ export default function TypingGame() {
     setEquipped(prev => ({ ...prev, [slot]: null }));
   };
 
-  const handleWin = (stage) => {
+  // 勝利時の処理（スコア計算・実績更新を含む）
+  const handleWin = (stage, resultData = {}) => {
+    const { clearTime = 0, typeCount = 0, missCount = 0, missedWords = {}, missedKeys = {} } = resultData;
+    
+    const score = calculateScore(stage, clearTime, missCount);
+    const cpm = calculateCPM(typeCount, clearTime);
+    
     const gold = stage * 100 + Math.floor(Math.random() * 50);
     const item = generateItem(player.level, player.job);
     let newPlayer = { ...player };
     newPlayer.gold += gold;
     newPlayer.exp += stage * 50;
     
+    // 実績更新
+    if (!newPlayer.records) {
+      newPlayer.records = { totalTypes: 0, totalMiss: 0, dungeonClears: 0, missedWords: {}, missedKeys: {}, daily: {} };
+    }
+    
+    newPlayer.records.totalTypes += typeCount;
+    newPlayer.records.totalMiss += missCount;
+    newPlayer.records.dungeonClears += 1;
+    
+    // 苦手ワード集計
+    Object.entries(missedWords).forEach(([word, count]) => {
+      newPlayer.records.missedWords[word] = (newPlayer.records.missedWords[word] || 0) + count;
+    });
+
+    // 苦手キー集計
+    if (!newPlayer.records.missedKeys) newPlayer.records.missedKeys = {};
+    Object.entries(missedKeys).forEach(([key, count]) => {
+      newPlayer.records.missedKeys[key] = (newPlayer.records.missedKeys[key] || 0) + count;
+    });
+    
+    // 日次データ更新
+    const today = getTodayString();
+    if (!newPlayer.records.daily[today]) {
+      newPlayer.records.daily[today] = { clears: 0, types: 0, time: 0 };
+    }
+    newPlayer.records.daily[today].clears += 1;
+    newPlayer.records.daily[today].types += typeCount;
+    newPlayer.records.daily[today].time += clearTime;
+
     const reqExp = newPlayer.level * 100;
     let levelUpInfo = null;
     if (newPlayer.exp >= reqExp) {
@@ -259,7 +324,7 @@ export default function TypingGame() {
     if (stage === newPlayer.maxStage) {
       newPlayer.maxStage += 1;
     }
-    refreshShop();
+    
     setPlayer(newPlayer);
     setInventory(prev => [...prev, item]);
     setModalMessage({
@@ -267,7 +332,8 @@ export default function TypingGame() {
       title: 'STAGE CLEAR!',
       gold,
       item,
-      levelUpInfo
+      levelUpInfo,
+      scoreInfo: { score, cpm, missCount, clearTime }
     });
     setGameState('RESULT');
   };
@@ -278,6 +344,11 @@ export default function TypingGame() {
       title: 'GAME OVER...',
     });
     setGameState('RESULT');
+  };
+
+  // 途中離脱処理
+  const handleRetreat = () => {
+    setGameState('TOWN');
   };
 
   const handleLogout = async () => {
@@ -337,6 +408,7 @@ export default function TypingGame() {
                    setPlayer(null);
                    setInventory([]);
                    setEquipped({});
+                   setShopItems([]);
                 } else {
                    setPlayer(null); 
                 }
@@ -349,30 +421,60 @@ export default function TypingGame() {
         />
       }
       {gameState === 'CHAR_CREATE' && <CharCreateScreen onCreate={handleCreateChar} onBack={handleLogout} />}
-      {gameState === 'TOWN' && player && <TownScreen player={player} inventory={inventory} equipped={equipped} onEquip={handleEquip} onUnequip={handleUnequip} onStartBattle={startBattle} onLogout={handleLogout} onOpenShop={() => setGameState('SHOP')} onClassChange={() => setGameState('CLASS_CHANGE')} difficulty={difficulty} />}
-      {gameState === 'SHOP' && player && <ShopScreen player={player} inventory={inventory} equipped={equipped} setPlayer={setPlayer} setInventory={setInventory} onBack={() => setGameState('TOWN')} shopItems={shopItems} onRefreshShop={setShopItems} />}
+      
+      {gameState === 'TOWN' && player && 
+        <TownScreen 
+          player={player} 
+          inventory={inventory} 
+          equipped={equipped} 
+          shopItems={shopItems}
+          setShopItems={setShopItems}
+          setPlayer={setPlayer}
+          setInventory={setInventory}
+          onEquip={handleEquip} 
+          onUnequip={handleUnequip} 
+          onStartBattle={startBattle} 
+          onLogout={handleLogout} 
+          onClassChange={() => setGameState('CLASS_CHANGE')} 
+          difficulty={difficulty} 
+        />
+      }
+      
       {gameState === 'CLASS_CHANGE' && player && <ClassChangeScreen player={player} onChangeClass={handleChangeClass} onBack={() => setGameState('TOWN')} />}
       
-      {gameState === 'BATTLE' && battleState && player && <BattleScreen battleState={battleState} setBattleState={setBattleState} player={player} equipped={equipped} inventory={inventory} setInventory={setInventory} onWin={handleWin} onLose={handleLose} difficulty={difficulty} />}
+      {gameState === 'BATTLE' && battleState && player && 
+        <BattleScreen 
+          battleState={battleState} 
+          setBattleState={setBattleState} 
+          player={player} 
+          equipped={equipped} 
+          inventory={inventory} 
+          setInventory={setInventory} 
+          onWin={handleWin} 
+          onLose={handleLose} 
+          onRetreat={handleRetreat}
+          difficulty={difficulty} 
+        />
+      }
       
-      {/* 新規画面: ロビー (修正: userIdを渡す) */}
+      {/* 新規画面: ロビー */}
       {gameState === 'LOBBY' && player && fbUser && (
         <LobbyScreen 
           player={player}
-          userId={fbUser.uid} // 一意なIDを渡す
+          userId={fbUser.uid} 
           difficulty={difficulty}
           onJoinRoom={handleJoinRoom}
           onBack={() => setGameState('TITLE')}
         />
       )}
 
-      {/* 新規画面: マルチプレイ対戦 (修正: userIdを渡す) */}
+      {/* 新規画面: マルチプレイ対戦 */}
       {gameState === 'MULTI_BATTLE' && player && multiplayerRoomId && fbUser && (
         <MultiplayerBattleScreen 
           roomId={multiplayerRoomId}
           playerRole={multiplayerRole}
           player={player}
-          userId={fbUser.uid} // 一意なIDを渡す
+          userId={fbUser.uid} 
           onFinish={() => setGameState('LOBBY')}
         />
       )}

@@ -5,13 +5,25 @@ export const generateId = () => Math.random().toString(36).substr(2, 9);
 
 export const getRarity = () => {
   const rand = Math.random();
-  if (rand > 1 - RARITY.LEGENDARY.chance) return RARITY.LEGENDARY;
-  if (rand > 1 - RARITY.LEGENDARY.chance - RARITY.EPIC.chance) return RARITY.EPIC;
-  if (rand > 1 - RARITY.LEGENDARY.chance - RARITY.EPIC.chance - RARITY.RARE.chance) return RARITY.RARE;
-  return RARITY.COMMON;
+  if (rand > 1 - RARITY.LR.chance) return RARITY.LR;
+  if (rand > 1 - RARITY.LR.chance - RARITY.UR.chance) return RARITY.UR;
+  if (rand > 1 - RARITY.LR.chance - RARITY.UR.chance - RARITY.SR.chance) return RARITY.SR;
+  if (rand > 1 - RARITY.LR.chance - RARITY.UR.chance - RARITY.SR.chance - RARITY.R.chance) return RARITY.R;
+  return RARITY.N;
 };
 
 export const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+// 名前ランダム生成
+export const generateRandomName = () => {
+  const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンー';
+  let name = "";
+  const len = Math.floor(Math.random() * 4) + 2; // 2~5文字
+  for(let i=0; i<len; i++) {
+    name += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return name;
+};
 
 // 道具の生成ヘルパー
 export const generateConsumable = () => {
@@ -23,9 +35,10 @@ export const generateConsumable = () => {
       name: data.name,
       type: 'CONSUMABLE',
       consumableId: key,
-      rarity: 'common',
+      rarity: 'n',
       stats: { wt: 0 },
-      value: data.price
+      value: data.price,
+      jobReq: null // 道具は全職使用可能
     };
 };
 
@@ -41,58 +54,106 @@ export const generateItem = (playerLevel, jobType = null) => {
   const typeName = ITEM_TYPES[typeKey];
   
   let multiplier = 1;
-  if (rarity.id === 'rare') multiplier = 1.3;
-  if (rarity.id === 'epic') multiplier = 1.8;
-  if (rarity.id === 'legendary') multiplier = 3.0;
+  if (rarity.id === 'r') multiplier = 1.3;
+  if (rarity.id === 'sr') multiplier = 1.7;
+  if (rarity.id === 'ur') multiplier = 2.5;
+  if (rarity.id === 'lr') multiplier = 4.0;
 
   const baseVal = Math.floor((playerLevel * 2 + 3) * multiplier);
   
   const adjectives = ['古びた', '普通の', '上質な', '重厚な', '軽量な', '伝説の', '神々の'];
-  const adjIndex = Math.min(Math.floor(Math.random() * adjectives.length), rarity.id === 'legendary' ? 6 : 4);
+  const adjIndex = Math.min(Math.floor(Math.random() * adjectives.length), rarity.id === 'lr' ? 6 : 4);
   const adj = adjectives[adjIndex];
   
   let name = `${adj}${typeName}`;
   let stats = { atk: 0, def: 0, wt: 0 };
+  let jobReq = null; // nullなら全職装備可能
 
   let baseWt = getRandomInt(1, 4) + Math.floor(playerLevel / 10);
   if (adj === '重厚な') baseWt += 4;
   if (adj === '軽量な') baseWt = Math.max(1, baseWt - 2);
 
-  let targetJob = jobType;
-  if (!targetJob && typeKey === 'WEAPON') {
-     const jobKeys = Object.keys(JOBS);
-     targetJob = JOBS[jobKeys[Math.floor(Math.random() * jobKeys.length)]].id;
-  }
-
+  // 武器の生成 (職業制限あり)
   if (typeKey === 'WEAPON') {
-    if (targetJob === 'fighter') name = `${adj}剣`;
-    else if (targetJob === 'mage') name = `${adj}杖`;
-    else if (targetJob === 'monk') name = `${adj}爪`;
-    else if (targetJob === 'archer') name = `${adj}弓`;
-    else name = `${adj}武器`;
-    
-    stats.atk = baseVal;
-    stats.wt = baseWt + 2;
-  } else if (typeKey === 'HEAD') {
-    name = `${adj}兜`;
+     let targetJob = jobType;
+     if (!targetJob) {
+        const jobKeys = Object.keys(JOBS);
+        targetJob = JOBS[jobKeys[Math.floor(Math.random() * jobKeys.length)]].id;
+     }
+     
+     jobReq = [targetJob]; // その職業専用にする
+
+     if (targetJob === 'fighter') {
+       // ファイターは剣か盾
+       if (Math.random() < 0.7) {
+         name = `${adj}剣`;
+         stats.atk = baseVal;
+         stats.wt = baseWt + 2;
+       } else {
+         name = `${adj}盾`;
+         stats.def = Math.floor(baseVal * 0.8);
+         stats.atk = Math.floor(baseVal * 0.2);
+         stats.wt = baseWt + 3;
+       }
+     } else if (targetJob === 'mage') {
+       name = `${adj}杖`;
+       stats.atk = baseVal;
+       stats.wt = baseWt + 1;
+     } else if (targetJob === 'monk') {
+       name = `${adj}ナックル`;
+       stats.atk = Math.floor(baseVal * 0.9);
+       stats.wt = baseWt;
+     } else if (targetJob === 'archer') {
+       name = `${adj}弓`;
+       stats.atk = Math.floor(baseVal * 0.9);
+       stats.wt = baseWt + 1;
+     } else {
+       name = `${adj}武器`;
+       stats.atk = baseVal;
+     }
+  } 
+  // 頭防具の生成 (職業制限あり)
+  else if (typeKey === 'HEAD') {
+    const jobKeys = Object.keys(JOBS);
+    const targetJob = JOBS[jobKeys[Math.floor(Math.random() * jobKeys.length)]].id;
+    jobReq = [targetJob];
+
+    if (targetJob === 'fighter') name = `${adj}兜`;
+    else if (targetJob === 'mage') name = `${adj}ハット`;
+    else if (targetJob === 'monk') name = `${adj}バンダナ`;
+    else if (targetJob === 'archer') name = `${adj}フード`;
+    else name = `${adj}兜`;
+
     stats.def = Math.floor(baseVal * 0.5);
     stats.wt = baseWt;
-  } else if (typeKey === 'BODY') {
+  } 
+  // 身体防具 (全職共通)
+  else if (typeKey === 'BODY') {
     name = `${adj}鎧`;
     stats.def = baseVal;
     stats.wt = baseWt + 4;
-  } else if (typeKey === 'FEET') {
+  } 
+  // 足防具 (全職共通)
+  else if (typeKey === 'FEET') {
     name = `${adj}靴`;
     stats.def = Math.floor(baseVal * 0.3);
     stats.wt = Math.max(0, baseWt - 2);
-  } else {
+  } 
+  // アクセサリー (全職共通)
+  else {
     name = `${adj}指輪`;
     stats.atk = Math.floor(baseVal * 0.2);
     stats.def = Math.floor(baseVal * 0.2);
     stats.wt = 0;
   }
 
-  if (rarity.id === 'legendary') stats.wt = Math.max(0, stats.wt - 5);
+  // LRの場合の特別処理
+  let uniqueCode = null;
+  if (rarity.id === 'lr') {
+    stats.wt = Math.max(0, stats.wt - 5);
+    uniqueCode = `#${Math.floor(Math.random() * 900000) + 100000}`;
+    name = `${name} ${uniqueCode}`;
+  }
 
   return {
     id: generateId(),
@@ -100,7 +161,10 @@ export const generateItem = (playerLevel, jobType = null) => {
     type: typeKey,
     rarity: rarity.id,
     stats,
-    value: baseVal * 10 * RARITY[rarity.id.toUpperCase()].priceMod
+    value: baseVal * 10 * RARITY[rarity.id.toUpperCase()].priceMod,
+    jobReq,
+    uniqueCode,
+    locked: false // ロックフラグ初期値
   };
 };
 
@@ -188,4 +252,26 @@ export const calculateEffectiveStats = (player, equipped, buffs = {}) => {
       critRate
     }
   };
+};
+
+// スコア計算
+export const calculateScore = (stage, clearTimeMs, missCount) => {
+  const baseScore = stage * 1000;
+  const standardTimeMs = 50000 + (stage * 5000); 
+  const timeBonus = Math.max(0, Math.floor((standardTimeMs - clearTimeMs) / 100));
+  const missPenalty = missCount * 50;
+  return Math.max(0, baseScore + timeBonus - missPenalty);
+};
+
+// 分間タイプ数
+export const calculateCPM = (charCount, timeMs) => {
+  if (timeMs <= 0) return 0;
+  const minutes = timeMs / 60000;
+  return parseFloat((charCount / minutes).toFixed(1));
+};
+
+// 日付フォーマット
+export const getTodayString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };

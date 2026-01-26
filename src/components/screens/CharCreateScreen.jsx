@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { Feather, LogOut, ArrowRight } from 'lucide-react';
+import { Feather, LogOut, ArrowRight, Dices } from 'lucide-react';
 import { SVGs } from '../GameSvgs';
 import { JOBS, RACES, PERSONALITIES } from '../../constants/data';
+import { generateRandomName } from '../../utils/gameLogic';
 
 const CharCreateScreen = ({ onCreate, onBack }) => {
   const [form, setForm] = useState({ name: '冒険者', job: 'FIGHTER', race: 'HUMAN', gender: 'MALE', personality: 'BRAVE' });
+
+  const handleRandomName = () => {
+    setForm({...form, name: generateRandomName()});
+  };
 
   return (
     <div className="h-full relative overflow-y-auto text-slate-800 bg-slate-50">
@@ -23,13 +28,22 @@ const CharCreateScreen = ({ onCreate, onBack }) => {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-bold text-[#5b21b6] mb-1">氏名 (Name)</label>
-                <input 
-                  type="text" 
-                  value={form.name} 
-                  onChange={e => setForm({...form, name: e.target.value})}
-                  className="w-full bg-white border-2 border-[#ddd6fe] rounded p-2 text-slate-800 focus:outline-none focus:border-[#8b5cf6] font-serif text-lg shadow-inner"
-                  maxLength={10}
-                />
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={form.name} 
+                    onChange={e => setForm({...form, name: e.target.value})}
+                    className="flex-1 bg-white border-2 border-[#ddd6fe] rounded p-2 text-slate-800 focus:outline-none focus:border-[#8b5cf6] font-serif text-lg shadow-inner"
+                    maxLength={10}
+                  />
+                  <button 
+                    onClick={handleRandomName}
+                    className="bg-[#8b5cf6] text-white p-2 rounded hover:bg-[#7c3aed] transition-colors"
+                    title="ランダム生成"
+                  >
+                    <Dices size={24} />
+                  </button>
+                </div>
               </div>
 
               <div>

@@ -1,27 +1,131 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Skull, Zap, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Skull, Zap, ArrowRight, AlertTriangle, LogOut } from 'lucide-react';
 import { SVGs } from '../GameSvgs';
 import { MONSTER_TYPES, JOBS, CONSUMABLES } from '../../constants/data';
 import { calculateEffectiveStats } from '../../utils/gameLogic';
 
-const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory, setInventory, onWin, onLose, difficulty }) => {
+// -----------------------------------------------------------------------------
+// 効果音再生ユーティリティ (Web Audio API)
+// -----------------------------------------------------------------------------
+const playSound = (type) => {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    const now = ctx.currentTime;
+    
+    if (type === 'TYPE') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.08);
+      gain.gain.setValueAtTime(0.1, now); 
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+      osc.start(now);
+      osc.stop(now + 0.08);
+    } else if (type === 'MISS') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.linearRampToValueAtTime(100, now + 0.15);
+      gain.gain.setValueAtTime(0.1, now); 
+      gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    }
+    
+    setTimeout(() => {
+        if(ctx.state !== 'closed') ctx.close();
+    }, 1000);
+
+  } catch (e) {
+    console.error("Audio Error:", e);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// バーチャルキーボードコンポーネント
+// -----------------------------------------------------------------------------
+const Keyboard = ({ activeKey }) => {
+  const rows = [
+    ['1','2','3','4','5','6','7','8','9','0'],
+    ['Q','W','E','R','T','Y','U','I','O','P'],
+    ['A','S','D','F','G','H','J','K','L'],
+    ['Z','X','C','V','B','N','M']
+  ];
+  
+  return (
+    <div className="flex flex-col gap-2 items-center select-none pointer-events-none opacity-100 scale-100 origin-bottom transition-all duration-300">
+      {rows.map((row, i) => (
+        <div key={i} className="flex gap-2">
+          {row.map(char => {
+            const isActive = activeKey === char;
+            return (
+              <div 
+                key={char}
+                className={`
+                  w-10 h-10 sm:w-14 sm:h-14 rounded-lg flex items-center justify-center font-bold text-lg sm:text-2xl border-b-[6px] transition-all duration-75 shadow-md
+                  ${isActive 
+                    ? 'bg-red-500 text-white border-red-700 transform translate-y-2 shadow-[0_0_20px_#ef4444] border-b-0' 
+                    : 'bg-white text-slate-600 border-slate-300'}
+                `}
+              >
+                {char}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// -----------------------------------------------------------------------------
+// バトル画面メインコンポーネント
+// -----------------------------------------------------------------------------
+const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory, setInventory, onWin, onLose, onRetreat, difficulty }) => {
   const [typed, setTyped] = useState('');
   const inputRef = useRef(null);
   const [animEffect, setAnimEffect] = useState(null); 
   const [damageAnim, setDamageAnim] = useState(null); 
-  // 新規追加: IME入力中かどうかのState
   const [isComposing, setIsComposing] = useState(false);
+  const [highlightedKey, setHighlightedKey] = useState(null);
+  const [countdown, setCountdown] = useState(3);
+
+  // 計測用 Refs
+  const startTime = useRef(0);
+  const totalTypes = useRef(0);
+  const totalMiss = useRef(0);
+  const missedWords = useRef({});
+  const missedKeys = useRef({}); // 苦手キー記録用
 
   const enemy = battleState.enemies[battleState.currentEnemyIndex];
-  // 敵の画像を取得。定義がない場合はスライムをデフォルトとする
   const MonsterIll = (enemy && enemy.type && MONSTER_TYPES[enemy.type]) ? MONSTER_TYPES[enemy.type].illustration : SVGs.Slime;
   const PlayerIll = JOBS[player.job].Illustration;
   
   const eff = calculateEffectiveStats(player, equipped, battleState.buffs);
 
+  // カウントダウン処理
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      if (startTime.current === 0) startTime.current = Date.now();
+      if (inputRef.current) inputRef.current.focus();
+    }
+  }, [countdown]);
+
   // バトル進行のタイマー処理
   useEffect(() => {
-    if (battleState.isOver) return;
+    if (battleState.isOver || countdown > 0) return;
 
     const timer = setInterval(() => {
       setBattleState(prev => {
@@ -36,7 +140,6 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
         let newLog = [...prev.log];
         let damageType = null; 
         
-        // 毒ダメージ処理
         if (prev.statusAilments.poison) {
            if (now % 2000 < 100) { 
               newPlayerHp -= Math.floor(prev.playerMaxHp * 0.05);
@@ -44,16 +147,13 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
            }
         }
 
-        // バフ効果時間の減少
         const newBuffs = { ...prev.buffs };
         Object.keys(newBuffs).forEach(key => {
            if (newBuffs[key] > 0) newBuffs[key] = Math.max(0, newBuffs[key] - delta);
         });
 
-        // 敵の攻撃処理
         if (newGauge >= currentEnemy.attackInterval) {
           newGauge = 0;
-          
           const isDodge = Math.random() * 100 < eff.battle.evasionRate;
 
           if (isDodge) {
@@ -68,16 +168,11 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
              newLog.push(`痛い！ ${currentEnemy.name}から${damage}のダメージ！`);
              damageType = 'DAMAGE';
 
-             // 状態異常攻撃の判定
              const typeData = MONSTER_TYPES[currentEnemy.type];
              if (typeData && typeData.actions) {
                if (typeData.actions.includes('POISON') && Math.random() < 0.3) {
                  prev.statusAilments.poison = true;
                  newLog.push('毒を受けてしまった！');
-               }
-               if (typeData.actions.includes('PARALYSIS') && Math.random() < 0.3) {
-                 prev.statusAilments.paralysis = true;
-                 newLog.push('麻痺してしまった！');
                }
              }
           }
@@ -103,7 +198,7 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
     }, 100);
 
     return () => clearInterval(timer);
-  }, [setBattleState, battleState.isOver, eff.battle]); 
+  }, [setBattleState, battleState.isOver, eff.battle, countdown]); 
 
   // ダメージアニメーション制御
   useEffect(() => {
@@ -114,7 +209,7 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
     }
   }, [battleState.lastDamageTime, battleState.lastDamageType]);
 
-  // 勝敗判定
+  // 勝敗判定 & データ送信
   useEffect(() => {
     if (battleState.isOver) return; 
     if (battleState.playerHp <= 0) {
@@ -124,7 +219,15 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
     }
     if (battleState.isBossDefeated) {
         setBattleState(prev => ({ ...prev, isOver: true }));
-        setTimeout(() => onWin(battleState.stage), 500);
+        // 勝利時に計測データを送信
+        const clearTime = Date.now() - startTime.current;
+        setTimeout(() => onWin(battleState.stage, {
+            clearTime,
+            typeCount: totalTypes.current,
+            missCount: totalMiss.current,
+            missedWords: missedWords.current,
+            missedKeys: missedKeys.current // 苦手キーデータ送信
+        }), 500);
         return;
     }
   }, [battleState.playerHp, battleState.isBossDefeated, battleState.isOver, battleState.stage, onLose, onWin, setBattleState]);
@@ -134,7 +237,6 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
     if (inputRef.current) inputRef.current.focus();
   }, [battleState.currentEnemyIndex]);
 
-  // アイテム使用処理
   const handleUseItem = (item) => {
     const data = CONSUMABLES[item.consumableId];
     if (!data) return;
@@ -175,6 +277,7 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
     }
 
     if (used) {
+      playSound('TYPE');
       setInventory(prev => {
         const idx = prev.findIndex(i => i.id === item.id);
         if (idx === -1) return prev;
@@ -187,56 +290,71 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
     }
   };
 
-  // タイピング入力処理
   const handleInput = (e) => {
-    if (battleState.isOver) return;
+    if (battleState.isOver || countdown > 0) return;
     
-    if (battleState.statusAilments.paralysis && Math.random() < 0.3) {
-       setBattleState(prev => ({ ...prev, log: [...prev.log, '麻痺して動けない！'] }));
-       return;
-    }
-
     const val = e.target.value;
     if (!/^[a-zA-Z0-9]*$/.test(val)) return;
 
-    // 数字キーによるアイテム使用ショートカット
+    // 数字キー
     const num = parseInt(val.slice(-1));
-    if (!isNaN(num) && num > 0) {
-       const consumables = inventory.filter(i => i.type === 'CONSUMABLE');
-       if (consumables[num - 1]) {
-         handleUseItem(consumables[num - 1]);
-         setTyped(prev => prev); // 入力欄を更新しない（数字を残さない）
-         return;
+    if (!isNaN(num)) {
+       setHighlightedKey(String(num));
+       setTimeout(() => setHighlightedKey(null), 150);
+
+       if (num > 0) {
+           const consumables = inventory.filter(i => i.type === 'CONSUMABLE');
+           if (consumables[num - 1]) {
+             handleUseItem(consumables[num - 1]);
+           }
        }
+       return;
     }
 
     if (/[0-9]/.test(val)) return;
 
-    const targetRomaji = enemy.word.romaji;
-    const currentLength = typed.length;
-
-    if (val.length > currentLength) {
+    if (val.length > typed.length) {
        const addedChar = val.slice(-1);
+       const upperChar = addedChar.toUpperCase();
+       
+       setHighlightedKey(upperChar);
+       setTimeout(() => setHighlightedKey(null), 150);
+
+       const targetRomaji = enemy.word.romaji;
+       const currentLength = typed.length;
        const expectedChar = targetRomaji[currentLength];
 
        if (addedChar === expectedChar) {
+          // 正解
+          totalTypes.current += 1;
+          playSound('TYPE'); 
           setTyped(val);
           if (val === targetRomaji) {
             setTyped('');
             attackEnemy();
           }
        } else {
+          // ミス
+          totalMiss.current += 1;
+          
+          // 苦手ワード記録
+          const w = enemy.word.display;
+          missedWords.current[w] = (missedWords.current[w] || 0) + 1;
+
+          // 苦手キー記録 (正解のキーを記録すべきか、間違えて押したキーか。一般的に「どのキーでミスったか」より「どのキーを打つべき時にミスったか」の方が有益なのでexpectedCharを記録)
+          const k = expectedChar.toUpperCase();
+          missedKeys.current[k] = (missedKeys.current[k] || 0) + 1;
+
+          playSound('MISS'); 
           applyPenalty();
        }
     } else {
-      // 削除キー対応などで文字が減った場合
       if (val === targetRomaji.substring(0, val.length)) {
           setTyped(val);
       }
     }
   };
 
-  // ミスペナルティ処理
   const applyPenalty = () => {
      setAnimEffect('MISS');
      setTimeout(() => setAnimEffect(null), 300);
@@ -252,7 +370,6 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
      });
   };
 
-  // 攻撃処理
   const attackEnemy = () => {
     const isHit = Math.random() * 100 < eff.battle.hitRate;
     if (!isHit) {
@@ -273,7 +390,7 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
         const newEnemies = [...prev.enemies];
         const currentEnemy = newEnemies[prev.currentEnemyIndex];
         currentEnemy.hp -= dmg;
-        currentEnemy.currentAttackGauge = Math.max(0, currentEnemy.currentAttackGauge - 300); // 攻撃成功で敵のゲージを少し減らす
+        currentEnemy.currentAttackGauge = Math.max(0, currentEnemy.currentAttackGauge - 300); 
         const newLog = [...prev.log, `${enemy.name}に${dmg}のダメージ！${isCrit ? '(会心)' : ''}`];
         
         let nextIndex = prev.currentEnemyIndex;
@@ -316,16 +433,36 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
             <span className="bg-blue-600 text-white w-8 h-8 rounded flex items-center justify-center text-sm shadow-sm">{battleState.stage}</span>
             STAGE {battleState.stage}
           </div>
-          <div className="flex gap-4">
+          <div className="flex items-center gap-4">
              {battleState.statusAilments.poison && <div className="bg-purple-100 px-3 py-1 rounded text-purple-700 animate-pulse font-bold flex items-center gap-1 border border-purple-200"><Skull size={14}/> 毒</div>}
-             {battleState.statusAilments.paralysis && <div className="bg-yellow-100 px-3 py-1 rounded text-yellow-700 animate-pulse font-bold flex items-center gap-1 border border-yellow-200"><Zap size={14}/> 麻痺</div>}
              {Object.entries(battleState.buffs).map(([key, val]) => val > 0 && (
                 <div key={key} className="bg-orange-100 px-3 py-1 rounded text-orange-700 font-bold flex items-center gap-1 border border-orange-200"><ArrowRight size={14} className="-rotate-45"/> {key.toUpperCase()} UP</div>
              ))}
+             
+             <button 
+               onClick={(e) => {
+                 e.stopPropagation();
+                 if (window.confirm('戦闘を放棄して町へ戻りますか？\n(ペナルティはありません)')) {
+                   onRetreat();
+                 }
+               }}
+               className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded shadow-md font-bold text-xs flex items-center gap-1 transition-colors"
+             >
+               <LogOut size={14} /> 帰還
+             </button>
           </div>
       </div>
 
-      {/* 入力モードインジケーター（新規追加） */}
+      {/* カウントダウン */}
+      {countdown > 0 && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] animate-fade-in">
+          <div className="text-9xl font-black text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] animate-bounce">
+            {countdown}
+          </div>
+        </div>
+      )}
+
+      {/* 入力モードインジケーター */}
       <div className="absolute top-20 right-4 z-50 pointer-events-none">
         <div className={`px-4 py-2 rounded-full font-bold text-sm shadow-lg border-2 transition-all ${isComposing ? 'bg-red-100 text-red-600 border-red-500 animate-pulse' : 'bg-blue-100 text-blue-600 border-blue-500'}`}>
            {isComposing ? '⚠️ 日本語入力中 (英数に切替)' : 'A 英数モード'}
@@ -333,8 +470,7 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
       </div>
 
       {/* メインバトル画面 */}
-      <div className="flex-1 flex items-center justify-between px-10 relative z-10 max-w-6xl mx-auto w-full">
-        {/* プレイヤー側 */}
+      <div className="flex-1 flex items-center justify-between px-10 relative z-10 max-w-6xl mx-auto w-full mb-32">
         <div className={`flex flex-col items-center transition-all duration-100 ${damageAnim === 'DAMAGE' ? 'translate-x-[-10px] text-red-500' : ''}`}>
             <div className="relative">
               <div className={`w-32 h-32 bg-slate-100 rounded-full border-4 border-blue-500 flex items-center justify-center shadow-lg overflow-hidden ${Object.values(battleState.buffs).some(v => v > 0) ? 'shadow-[0_0_40px_rgba(251,146,60,0.5)]' : ''}`}>
@@ -354,7 +490,6 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
 
         <div className="text-4xl font-black text-slate-300 italic opacity-50">VS</div>
 
-        {/* 敵側 */}
         <div className={`flex flex-col items-center transition-all duration-200 ${animEffect === 'ATTACK' || animEffect === 'CRITICAL' ? 'opacity-50 scale-95' : ''}`}>
             <div className="mb-2 w-48 flex items-center gap-2">
               <AlertTriangle size={16} className={attackProgress > 80 ? 'text-red-500 animate-pulse' : 'text-slate-400'} />
@@ -397,29 +532,41 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
         className="opacity-0 absolute top-0 left-0 w-full h-full cursor-default" 
         value={typed} 
         onChange={handleInput} 
-        // CompositionイベントでIME状態を判定
         onCompositionStart={() => setIsComposing(true)}
         onCompositionEnd={() => setIsComposing(false)}
-        autoFocus 
+        autoFocus
+        autoComplete="off"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck="false"
       />
+
+      {/* バーチャルキーボード */}
+      <div className="absolute bottom-40 left-1/2 transform -translate-x-1/2 z-20 w-full flex justify-center">
+         <Keyboard activeKey={highlightedKey} />
+      </div>
 
       {/* アイテムショートカット */}
       <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
-         {consumables.slice(0, 9).map((item, i) => (
-           <button 
-             key={item.id} 
-             onClick={(e) => { e.stopPropagation(); handleUseItem(item); }}
-             className="w-12 h-12 bg-white border-2 border-slate-300 rounded flex flex-col items-center justify-center hover:border-yellow-500 hover:scale-110 transition-all relative shadow-md"
-             title={CONSUMABLES[item.consumableId].desc}
-           >
-             <div className="scale-75">{CONSUMABLES[item.consumableId].icon}</div>
-             <div className="absolute -top-2 -right-2 bg-slate-800 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center border border-slate-600">{i + 1}</div>
-           </button>
-         ))}
+         {consumables.slice(0, 9).map((item, i) => {
+           const itemData = CONSUMABLES[item.consumableId];
+           if (!itemData) return null;
+           return (
+             <button 
+               key={item.id} 
+               onClick={(e) => { e.stopPropagation(); handleUseItem(item); }}
+               className="w-10 h-10 sm:w-12 sm:h-12 bg-white/90 border-2 border-slate-300 rounded flex flex-col items-center justify-center hover:border-yellow-500 hover:scale-110 transition-all relative shadow-md"
+               title={itemData.desc}
+             >
+               <div className="scale-75">{itemData.icon}</div>
+               <div className="absolute -top-2 -right-2 bg-slate-800 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center border border-slate-600">{i + 1}</div>
+             </button>
+           );
+         })}
       </div>
 
       {/* バトルログ */}
-      <div className="h-32 bg-slate-100 p-4 overflow-y-auto text-xs font-mono text-slate-600 border-t border-slate-300 z-10">
+      <div className="h-28 bg-slate-100 p-4 overflow-y-auto text-xs font-mono text-slate-600 border-t border-slate-300 z-10">
         {battleState.log.map((l, i) => <div key={i} className="border-b border-slate-200 py-1">{l}</div>)}
         <div ref={(el) => el && el.scrollIntoView({ behavior: 'smooth' })}></div>
       </div>

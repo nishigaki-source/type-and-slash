@@ -9,15 +9,7 @@ const TitleScreen = ({ player, onStartNew, onResume, onDelete, difficulty, setDi
       </h1>
       <p className="text-slate-500 font-medium">タイピング・ハックアンドスラッシュ</p>
       
-      <div className="max-w-2xl bg-white/80 p-6 rounded-lg backdrop-blur-md border border-slate-200 text-sm leading-relaxed text-slate-700 shadow-xl">
-        <h3 className="text-yellow-600 font-bold mb-2 text-center text-lg">STORY</h3>
-        <p className="mb-2">大陸の辺境で発見された謎の「無限遺跡」。そこは入るたびに構造が変化し、見たこともない財宝と凶悪な魔物がひしめく場所だった。</p>
-        <p className="mb-2">この発見により、遺跡の入り口には瞬く間に「始まりの町」が形成され、富と名声を求める者たちが世界中から集まった。</p>
-        <p className="mb-2">人間、エルフ、魔族、ドワーフ……種族間の確執を超え、彼らはパーティを組み、遺跡の深淵へと挑む。</p>
-        <p className="text-center text-blue-600 mt-2 font-bold">遺跡の奥底には「願いを一つだけ叶える至宝」があるという噂がまことしやかに囁かれている。</p>
-      </div>
-
-      <div className="bg-white p-4 rounded-xl border border-slate-200 w-64 shadow-lg">
+      <div className="bg-white p-4 rounded-xl border border-slate-200 w-80 shadow-lg">
         <div className="text-center text-sm text-slate-500 mb-2 flex items-center justify-center gap-1">
           <Settings size={14}/> モード設定
         </div>
@@ -35,6 +27,13 @@ const TitleScreen = ({ player, onStartNew, onResume, onDelete, difficulty, setDi
           >
             ふつう
             <div className="text-[10px] font-normal">漢字あり</div>
+          </button>
+          <button 
+            onClick={() => setDifficulty('HARD')}
+            className={`flex-1 py-2 rounded text-sm font-bold transition-all ${difficulty === 'HARD' ? 'bg-red-500 text-white shadow-md scale-105' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+          >
+            むずかしい
+            <div className="text-[10px] font-normal">英数記号</div>
           </button>
         </div>
       </div>
@@ -70,7 +69,7 @@ const TitleScreen = ({ player, onStartNew, onResume, onDelete, difficulty, setDi
           </button>
         </div>
       )}
-      <div className="text-xs text-slate-400 mt-10">Ver 3.2 (Multiplayer Update)</div>
+      <div className="text-xs text-slate-400 mt-10">Ver 3.4 (Feature Update)</div>
     </div>
   );
 };
