@@ -1,8 +1,8 @@
 import React from 'react';
-import { Trophy, Activity, BarChart2, Keyboard } from 'lucide-react';
+import { Trophy, Activity, BarChart2, Keyboard, Swords } from 'lucide-react';
 
 const DashboardView = ({ player }) => {
-  const rec = player.records || { totalTypes:0, totalMiss:0, dungeonClears:0, missedWords:{}, missedKeys:{}, daily:{} };
+  const rec = player.records || { totalTypes:0, totalMiss:0, dungeonClears:0, arenaChallenges:0, missedWords:{}, missedKeys:{}, daily:{} };
   const totalTypes = rec.totalTypes;
   const totalMiss = rec.totalMiss;
   const missRate = totalTypes > 0 ? ((totalMiss / (totalTypes + totalMiss)) * 100).toFixed(1) : 0;
@@ -24,16 +24,20 @@ const DashboardView = ({ player }) => {
   for(let i=13; i>=0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    // YYYY-MM-DD 形式でキーを作成 (utils/gameLogic.js の getTodayString と合わせる)
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const dayData = (rec.daily && rec.daily[dateStr]) || { clears: 0, types: 0, time: 0 };
+    const dayData = (rec.daily && rec.daily[dateStr]) || { clears: 0, arenaChallenges: 0, types: 0, time: 0 };
     const dayCPM = dayData.time > 0 ? (dayData.types / (dayData.time/60000)) : 0;
-    // 表示用日付 (MM/DD)
     const displayDate = `${d.getMonth() + 1}/${d.getDate()}`;
-    graphData.push({ date: displayDate, clears: dayData.clears, cpm: dayCPM });
+    graphData.push({ 
+      date: displayDate, 
+      clears: dayData.clears || 0,
+      arena: dayData.arenaChallenges || 0,
+      cpm: dayCPM 
+    });
   }
 
-  const maxClears = Math.max(5, ...graphData.map(d => d.clears));
+  // グラフの最大値計算（積み上げ合計）
+  const maxActivities = Math.max(5, ...graphData.map(d => d.clears + d.arena));
   const maxCPM = Math.max(100, ...graphData.map(d => d.cpm));
 
   return (
@@ -59,9 +63,14 @@ const DashboardView = ({ player }) => {
             <div className="text-xs text-slate-500 mb-1">平均タイプ速度 (文字/分)</div>
             <div className="text-2xl font-bold text-green-600">{avgCPM}</div>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm col-span-2">
+          
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <div className="text-xs text-slate-500 mb-1">ダンジョン探索回数</div>
             <div className="text-2xl font-bold text-yellow-600">{rec.dungeonClears} 回</div>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <div className="text-xs text-slate-500 mb-1">アリーナ挑戦回数</div>
+            <div className="text-2xl font-bold text-purple-600">{rec.arenaChallenges || 0} 回</div>
           </div>
         </div>
 
@@ -100,19 +109,36 @@ const DashboardView = ({ player }) => {
           <h3 className="text-sm font-bold text-slate-600 mb-4 flex items-center gap-2"><BarChart2 size={16}/> 成長記録 (直近14日)</h3>
           
           <div className="mb-6">
-            <div className="text-xs text-slate-400 mb-2 text-center">日別ダンジョン探索数</div>
+            <div className="text-xs text-slate-400 mb-2 text-center flex justify-center gap-4">
+               <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-400 rounded-full"></span>ダンジョン</span>
+               <span className="flex items-center gap-1"><span className="w-2 h-2 bg-red-400 rounded-full"></span>アリーナ</span>
+            </div>
             <div className="flex items-end justify-between h-32 gap-1 border-b border-slate-100 pb-1">
-              {graphData.map((d, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center group relative">
-                  <div 
-                    className="w-full bg-blue-200 rounded-t hover:bg-blue-400 transition-all relative min-h-[1px]"
-                    style={{ height: `${Math.max(1, (d.clears / maxClears) * 100)}%` }}
-                  >
-                    {d.clears > 0 && <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 text-[8px] text-slate-500 opacity-0 group-hover:opacity-100">{d.clears}</div>}
+              {graphData.map((d, i) => {
+                const total = d.clears + d.arena;
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center group relative justify-end h-full">
+                    {/* アリーナ（赤） */}
+                    <div 
+                      className="w-full bg-red-400 rounded-t-sm hover:bg-red-500 transition-all relative"
+                      style={{ height: `${total > 0 ? (d.arena / maxActivities) * 100 : 0}%` }}
+                    />
+                    {/* ダンジョン（緑） */}
+                    <div 
+                      className="w-full bg-green-400 rounded-b-sm hover:bg-green-500 transition-all relative"
+                      style={{ height: `${total > 0 ? (d.clears / maxActivities) * 100 : 0}%` }}
+                    />
+                    
+                    {/* ツールチップ */}
+                    {total > 0 && (
+                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-[8px] bg-slate-800 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none z-10 whitespace-nowrap">
+                        D:{d.clears} / A:{d.arena}
+                      </div>
+                    )}
+                    <div className="text-[8px] text-slate-400 mt-1 transform -rotate-90 origin-top-left h-6 overflow-visible whitespace-nowrap translate-y-6">{d.date}</div>
                   </div>
-                  <div className="text-[8px] text-slate-400 mt-1 transform -rotate-90 origin-top-left h-6 overflow-visible whitespace-nowrap translate-y-6">{d.date}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -123,7 +149,7 @@ const DashboardView = ({ player }) => {
                  {graphData.map((d, i) => (
                    <div key={i} className="flex-1 flex justify-center h-full relative group">
                       <div 
-                        className="w-2 h-2 bg-green-500 rounded-full absolute hover:scale-150 transition-transform z-10"
+                        className="w-2 h-2 bg-blue-500 rounded-full absolute hover:scale-150 transition-transform z-10"
                         style={{ bottom: `${(d.cpm / maxCPM) * 100}%` }}
                       ></div>
                       <div className="absolute text-[8px] bg-slate-800 text-white px-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20 whitespace-nowrap" style={{ bottom: `${(d.cpm / maxCPM) * 100}%`, marginBottom: '8px' }}>

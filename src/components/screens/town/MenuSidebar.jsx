@@ -1,27 +1,35 @@
 import React from 'react';
 import { 
-  ShoppingBag, Shield, Mail, Trophy, FileText, 
+  ShoppingBag, Mail, Trophy, FileText, 
   Megaphone, User, LogOut, Sword, Backpack, 
-  ArrowLeftRight, Coins
+  ArrowLeftRight, Coins, Swords, Lock
 } from 'lucide-react';
 import { JOBS } from '../../../constants/data';
 
-const MenuButton = ({ icon, label, onClick, active = false, color = "bg-slate-800 hover:bg-slate-700" }) => (
+// MenuButtonコンポーネントを拡張してdisabledに対応
+const MenuButton = ({ icon, label, onClick, active = false, color = "bg-slate-800 hover:bg-slate-700", disabled = false }) => (
   <button 
-    onClick={onClick}
+    onClick={disabled ? null : onClick}
     className={`
       aspect-square flex flex-col items-center justify-center gap-2 rounded-lg border transition-all duration-200
-      ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]' : `${color} border-slate-700 text-slate-300`}
+      ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]' : 
+        disabled ? 'bg-slate-800/50 border-slate-700/50 text-slate-600 cursor-not-allowed' : 
+        `${color} border-slate-700 text-slate-300`}
     `}
+    title={disabled ? "ログインが必要です" : ""}
   >
-    <div className={active ? 'animate-bounce-slow' : ''}>{icon}</div>
-    <span className="text-xs font-bold">{label}</span>
+    <div className={active ? 'animate-bounce-slow' : ''}>
+      {disabled ? <Lock size={24} className="opacity-50"/> : icon}
+    </div>
+    <span className={`text-xs font-bold ${disabled ? 'text-slate-600' : ''}`}>{label}</span>
   </button>
 );
 
-const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty }) => {
+const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, isGuest }) => {
   const JobIll = JOBS[player.job].Illustration;
   const expPercent = player.level > 0 ? Math.min(100, Math.floor((player.exp / (player.level * 100)) * 100)) : 0;
+
+  const diffLabel = difficulty === 'EASY' ? 'かんたん' : difficulty === 'NORMAL' ? 'ふつう' : 'むずかしい';
 
   return (
     <div className="w-[320px] bg-slate-900 border-l border-slate-700 flex flex-col text-white shadow-2xl z-10">
@@ -36,7 +44,7 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty }
                <div className="text-xs text-slate-400">Lv.{player.level}</div>
             </div>
             <div className="text-xs px-2 py-1 bg-slate-700 rounded border border-slate-600 text-slate-300">
-               {difficulty === 'EASY' ? 'かんたん' : 'ふつう'}
+               {diffLabel}
             </div>
          </div>
          
@@ -56,7 +64,16 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty }
             {/* 上段 */}
             <MenuButton icon={<ShoppingBag size={24} />} label="ショップ" onClick={() => setActiveView('SHOP')} active={activeView === 'SHOP'} />
             <MenuButton icon={<Backpack size={24} />} label="アイテム" onClick={() => setActiveView('ITEM')} active={activeView === 'ITEM'} />
-            <MenuButton icon={<ArrowLeftRight size={24} />} label="トレード" onClick={() => setActiveView('TRADE')} active={activeView === 'TRADE'} color="bg-green-800/40 hover:bg-green-800/60 border-green-900" />
+            
+            {/* トレードボタン (ゲスト時は無効化) */}
+            <MenuButton 
+              icon={<ArrowLeftRight size={24} />} 
+              label="トレード" 
+              onClick={() => setActiveView('TRADE')} 
+              active={activeView === 'TRADE'} 
+              color="bg-green-800/40 hover:bg-green-800/60 border-green-900" 
+              disabled={isGuest}
+            />
             
             {/* 中段 */}
             <MenuButton icon={<Sword size={24} />} label="ダンジョン" onClick={() => setActiveView('DUNGEON')} active={activeView === 'DUNGEON'} color="bg-red-900/40 hover:bg-red-900/60 border-red-900" />
@@ -65,7 +82,17 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty }
             
             {/* 下段 */}
             <MenuButton icon={<User size={24} />} label="ステータス" onClick={() => setActiveView('STATUS')} active={activeView === 'STATUS'} />
-            <MenuButton icon={<Mail size={24} />} label="メール" onClick={() => setActiveView('MAIL')} active={activeView === 'MAIL'} />
+            
+            {/* アリーナボタン (ゲスト時は無効化) */}
+            <MenuButton 
+              icon={<Swords size={24} />} 
+              label="アリーナ" 
+              onClick={() => setActiveView('ARENA')} 
+              active={activeView === 'ARENA'} 
+              color="bg-purple-900/40 hover:bg-purple-900/60 border-purple-900" 
+              disabled={isGuest} 
+            />
+            
             <MenuButton icon={<Megaphone size={24} />} label="お知らせ" onClick={() => setActiveView('INFO')} active={activeView === 'INFO'} />
          </div>
          

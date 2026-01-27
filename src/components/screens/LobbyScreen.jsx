@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Users, Eye, Play, ArrowLeft, Copy, User } from 'lucide-react';
-import { doc, setDoc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { Users, Eye, Play, ArrowLeft, Copy, User, Trash2 } from 'lucide-react';
+import { doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db, GAME_APP_ID } from '../../lib/firebase';
 import { generateId } from '../../utils/gameLogic';
 import { WORD_LISTS } from '../../constants/data';
@@ -10,11 +10,18 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
   const [mode, setMode] = useState('MENU');
   const [error, setError] = useState('');
   
-  const [hostName, setHostName] = useState('冒険者1');
-  const [guestName, setGuestName] = useState('冒険者2');
+  // ゲスト名の初期値
+  const [hostName, setHostName] = useState(player?.name || '冒険者1');
+  const [guestName, setGuestName] = useState(player?.name || '冒険者2');
 
-  // HP倍率の設定（ここを調整することで試合時間をコントロールできます）
-  const HP_MULTIPLIER = 30;
+  // 部屋の監視用
+  const [unsubscribe, setUnsubscribe] = useState(null);
+
+  useEffect(() => {
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [unsubscribe]);
 
   const createRoom = async () => {
     if (!hostName) {
@@ -28,20 +35,23 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
     const wordList = WORD_LISTS[difficulty];
     const p1Word = wordList[Math.floor(Math.random() * wordList.length)];
 
+    // ★修正: ゲスト対戦(ロビー)はHP100固定
+    const FIXED_HP = 100;
+
     const roomData = {
       status: 'WAITING',
       createdAt: Date.now(),
       difficulty: difficulty,
+      type: 'LOBBY',
       player1: {
-        id: userId,
+        id: userId || 'guest_host',
         name: hostName,
-        // ★修正: HPを大幅に増やす
-        hp: player.stats.hp * HP_MULTIPLIER,
-        maxHp: player.stats.hp * HP_MULTIPLIER,
+        hp: FIXED_HP,
+        maxHp: FIXED_HP,
         word: p1Word,
-        race: player.race,
-        job: player.job,
-        gender: player.gender,
+        race: player?.race || 'HUMAN',
+        job: player?.job || 'FIGHTER',
+        gender: player?.gender || 'MALE',
         ready: true
       },
       player2: null,
@@ -54,6 +64,7 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
       setMode('WAITING');
       subscribeToRoom(newRoomId);
     } catch (e) {
+      console.error(e);
       setError('ルーム作成に失敗しました: ' + e.message);
     }
   };
@@ -79,30 +90,33 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
         return;
       }
 
-      const wordList = WORD_LISTS[data.difficulty];
+      const wordList = WORD_LISTS[data.difficulty || 'NORMAL'];
       const p2Word = wordList[Math.floor(Math.random() * wordList.length)];
 
+      // ★修正: ゲスト対戦(ロビー)はHP100固定
+      const FIXED_HP = 100;
+
       const player2Data = {
-        id: userId,
+        id: userId || 'guest_joiner',
         name: guestName,
-        // ★修正: 参加側もHPを大幅に増やす
-        hp: player.stats.hp * HP_MULTIPLIER,
-        maxHp: player.stats.hp * HP_MULTIPLIER,
+        hp: FIXED_HP,
+        maxHp: FIXED_HP,
         word: p2Word,
-        race: player.race,
-        job: player.job,
-        gender: player.gender,
+        race: player?.race || 'HUMAN',
+        job: player?.job || 'FIGHTER',
+        gender: player?.gender || 'MALE',
         ready: true
       };
 
       await updateDoc(roomRef, {
         player2: player2Data,
         status: 'BATTLE',
-        logs: [...data.logs, `${guestName} が参加しました！対戦開始！`]
+        logs: [...(data.logs || []), `${guestName} が参加しました！対戦開始！`]
       });
 
       onJoinRoom(roomId, 'PLAYER');
     } catch (e) {
+      console.error(e);
       setError('参加に失敗しました: ' + e.message);
     }
   };
@@ -120,12 +134,27 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
 
   const subscribeToRoom = (id) => {
     const roomRef = doc(db, 'artifacts', GAME_APP_ID, 'rooms', id);
-    return onSnapshot(roomRef, (doc) => {
+    const unsub = onSnapshot(roomRef, (doc) => {
       const data = doc.data();
       if (data && data.status === 'BATTLE') {
         onJoinRoom(id, 'PLAYER');
       }
     });
+    setUnsubscribe(() => unsub);
+  };
+
+  const handleCancelWait = async () => {
+    if (roomId) {
+      try {
+        if (unsubscribe) unsubscribe();
+        await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'rooms', roomId));
+      } catch (e) {
+        console.error("Delete Room Error:", e);
+      }
+    }
+    setRoomId('');
+    setMode('MENU');
+    setError('');
   };
 
   if (mode === 'WAITING') {
@@ -137,11 +166,17 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
             <div className="text-sm text-slate-500 mb-1">ルームID (対戦相手に伝えてください)</div>
             <div className="text-4xl font-mono font-black text-slate-800 bg-slate-100 p-4 rounded border-2 border-slate-300 flex items-center justify-center gap-4">
               {roomId}
-              <button onClick={() => navigator.clipboard.writeText(roomId)} className="text-slate-400 hover:text-blue-500"><Copy size={20}/></button>
+              <button onClick={() => navigator.clipboard.writeText(roomId)} className="text-slate-400 hover:text-blue-500" title="コピー"><Copy size={20}/></button>
             </div>
           </div>
           <div className="text-sm text-slate-500">あなたの名前: <span className="font-bold text-slate-800">{hostName}</span></div>
-          <button onClick={onBack} className="mt-6 text-slate-400 hover:text-red-500 text-sm">キャンセルして戻る</button>
+          
+          <button 
+            onClick={handleCancelWait} 
+            className="mt-8 px-6 py-3 bg-red-100 text-red-600 hover:bg-red-200 rounded-lg font-bold flex items-center justify-center gap-2 w-full transition-colors"
+          >
+            <Trash2 size={18} /> キャンセルして戻る
+          </button>
         </div>
       </div>
     );
@@ -154,7 +189,6 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
           <Users /> マルチプレイロビー
         </h2>
 
-        {/* ルーム作成セクション */}
         <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
           <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-1">Player 1 (ホスト)</h3>
           <div className="space-y-3">
@@ -184,7 +218,6 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
           <span className="absolute top-[-10px] left-1/2 transform -translate-x-1/2 bg-white px-2 text-xs text-slate-400">または</span>
         </div>
 
-        {/* ルーム参加セクション */}
         <div className="p-4 bg-green-50 rounded-lg border border-green-100">
           <h3 className="text-sm font-bold text-green-800 mb-3 flex items-center gap-1">Player 2 (ゲスト) / 観戦</h3>
           <div className="space-y-3">

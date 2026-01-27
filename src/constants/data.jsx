@@ -10,6 +10,33 @@ export const GROWTH = {
   D: { min: 0, max: 2 },
 };
 
+// アリーナランク定義
+export const ARENA_RANKS = [
+  { id: 'BRONZE', name: 'ブロンズ', min: 0, max: 999, color: 'text-orange-700', icon: 'Dg' },
+  { id: 'SILVER', name: 'シルバー', min: 1000, max: 2999, color: 'text-slate-400', icon: 'Ag' },
+  { id: 'GOLD', name: 'ゴールド', min: 3000, max: 4999, color: 'text-yellow-500', icon: 'Au' },
+  { id: 'PLATINUM', name: 'プラチナ', min: 5000, max: 6999, color: 'text-cyan-400', icon: 'Pt' },
+  { id: 'DIAMOND', name: 'ダイヤモンド', min: 7000, max: 8499, color: 'text-blue-300', icon: 'dm' },
+  { id: 'MASTER', name: 'マスター', min: 8500, max: 9499, color: 'text-purple-500', icon: 'Ms' },
+  { id: 'CHAMPION', name: 'チャンピオン', min: 9500, max: 9999999, color: 'text-red-500', icon: 'Kg' },
+];
+
+// ★修正: 種族の相性定義 (4すくみに変更)
+export const RACE_ADVANTAGES = {
+  HUMAN: ['ELF'],    // 人間 -> エルフ
+  ELF: ['DEMON'],    // エルフ -> 魔族
+  DEMON: ['DWARF'],  // 魔族 -> ドワーフ
+  DWARF: ['HUMAN'],  // ドワーフ -> 人間
+};
+
+// 職業の相性定義 (4すくみ)
+export const JOB_ADVANTAGES = {
+  FIGHTER: ['ARCHER'], // ファイター -> アーチャー
+  ARCHER: ['MONK'],    // アーチャー -> モンク
+  MONK: ['MAGE'],      // モンク -> メイジ
+  MAGE: ['FIGHTER'],   // メイジ -> ファイター
+};
+
 export const JOBS = {
   FIGHTER: { 
     id: 'fighter', name: 'ファイター', weapon: '剣', 

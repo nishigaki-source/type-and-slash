@@ -13,11 +13,14 @@ import DungeonView from './town/DungeonView';
 import InventoryView from './town/InventoryView';
 import DashboardView from './town/DashboardView';
 import PlaceholderView from './town/PlaceholderView';
+import ArenaView from './town/ArenaView';
 
 const TownScreen = ({ 
   player, inventory, equipped, 
   shopItems, setShopItems, setPlayer, setInventory,
-  onEquip, onUnequip, onStartBattle, onLogout, onClassChange, difficulty 
+  onEquip, onUnequip, onStartBattle, onLogout, onClassChange, difficulty,
+  onStartArena,
+  isGuest // 追加: ゲストフラグを受け取る
 }) => {
   const [activeView, setActiveView] = useState('HOME');
   const [selectedStage, setSelectedStage] = useState(1);
@@ -61,6 +64,8 @@ const TownScreen = ({
         );
       
       case 'TRADE':
+        // 念のためここでもガード（UI側で無効化されるが、直接指定された場合など）
+        if (isGuest) return <HomeView />;
         return (
           <TradeView 
             player={player} 
@@ -96,11 +101,19 @@ const TownScreen = ({
       case 'ACHIEVEMENT':
         return <DashboardView player={player} />;
       
+      case 'ARENA': 
+        if (isGuest) return <HomeView />;
+        return (
+          <ArenaView 
+            player={player} 
+            equipped={equipped} 
+            userId={player.id || 'guest'}
+            onStartMatch={onStartArena} 
+          />
+        );
+
       case 'QUEST':
         return <PlaceholderView title="クエスト" icon={<FileText size={48}/>} />;
-      
-      case 'MAIL':
-        return <PlaceholderView title="メール" icon={<Mail size={48}/>} />;
       
       case 'INFO':
         return <PlaceholderView title="お知らせ" icon={<Megaphone size={48}/>} />;
@@ -122,9 +135,9 @@ const TownScreen = ({
         player={player} 
         activeView={activeView} 
         setActiveView={setActiveView} 
-        onOpenShop={() => setActiveView('SHOP')}
         onLogout={onLogout} 
         difficulty={difficulty} 
+        isGuest={isGuest} // 追加: サイドバーへ渡す
       />
     </div>
   );

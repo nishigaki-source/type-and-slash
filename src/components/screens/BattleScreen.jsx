@@ -49,29 +49,82 @@ const playSound = (type) => {
 };
 
 // -----------------------------------------------------------------------------
-// バーチャルキーボードコンポーネント
+// バーチャルキーボードコンポーネント (JIS配列 & Shift連動)
 // -----------------------------------------------------------------------------
 const Keyboard = ({ activeKey }) => {
-  const rows = [
-    ['1','2','3','4','5','6','7','8','9','0'],
-    ['Q','W','E','R','T','Y','U','I','O','P'],
-    ['A','S','D','F','G','H','J','K','L'],
-    ['Z','X','C','V','B','N','M']
+  const [isShift, setIsShift] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Shift') setIsShift(true);
+    };
+    const handleKeyUp = (e) => {
+      if (e.key === 'Shift') setIsShift(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // JIS配列ベースのキーマップ { n: 通常, s: Shift時, w: 幅(オプション) }
+  const keys = [
+    // Row 1
+    [
+      { n: '1', s: '!' }, { n: '2', s: '"' }, { n: '3', s: '#' }, { n: '4', s: '$' }, { n: '5', s: '%' },
+      { n: '6', s: '&' }, { n: '7', s: "'" }, { n: '8', s: '(' }, { n: '9', s: ')' }, { n: '0', s: '' },
+      { n: '-', s: '=' }, { n: '^', s: '~' }, { n: '¥', s: '|' }
+    ],
+    // Row 2
+    [
+      { n: 'q', s: 'Q' }, { n: 'w', s: 'W' }, { n: 'e', s: 'E' }, { n: 'r', s: 'R' }, { n: 't', s: 'T' },
+      { n: 'y', s: 'Y' }, { n: 'u', s: 'U' }, { n: 'i', s: 'I' }, { n: 'o', s: 'O' }, { n: 'p', s: 'P' },
+      { n: '@', s: '`' }, { n: '[', s: '{' }
+    ],
+    // Row 3
+    [
+      { label: 'Shift', width: 'w-14', isFunc: true },
+      { n: 'a', s: 'A' }, { n: 's', s: 'S' }, { n: 'd', s: 'D' }, { n: 'f', s: 'F' }, { n: 'g', s: 'G' },
+      { n: 'h', s: 'H' }, { n: 'j', s: 'J' }, { n: 'k', s: 'K' }, { n: 'l', s: 'L' }, { n: ';', s: '+' },
+      { n: ':', s: '*' }, { n: ']', s: '}' }
+    ],
+    // Row 4
+    [
+      { n: 'z', s: 'Z' }, { n: 'x', s: 'X' }, { n: 'c', s: 'C' }, { n: 'v', s: 'V' }, { n: 'b', s: 'B' },
+      { n: 'n', s: 'N' }, { n: 'm', s: 'M' }, { n: ',', s: '<' }, { n: '.', s: '>' }, { n: '/', s: '?' },
+      { n: '\\', s: '_' }
+    ]
   ];
   
   return (
-    <div className="flex flex-col gap-2 items-center select-none pointer-events-none opacity-100 scale-100 origin-bottom transition-all duration-300">
-      {rows.map((row, i) => (
-        <div key={i} className="flex gap-2">
-          {row.map(char => {
-            const isActive = activeKey === char;
+    <div className="flex flex-col gap-1 items-center select-none pointer-events-none opacity-90 scale-90 sm:scale-100 origin-bottom transition-all duration-300">
+      {keys.map((row, i) => (
+        <div key={i} className="flex gap-1">
+          {row.map((key, j) => {
+            // 機能キー（Shift）
+            if (key.isFunc) {
+               const isActive = key.label === 'Shift' && isShift;
+               return (
+                 <div key={j} className={`${key.width} h-10 rounded flex items-center justify-center font-bold text-xs bg-slate-700 text-white border-b-4 border-slate-900 ${isActive ? 'translate-y-1 border-b-0 shadow-inner' : ''}`}>
+                   {key.label}
+                 </div>
+               )
+            }
+            
+            // 通常キー
+            const char = isShift ? key.s : key.n;
+            // アクティブ判定: 表示文字と一致、またはShift状態を考慮したキー値と一致
+            const isHighlight = activeKey === char;
+
             return (
               <div 
-                key={char}
+                key={j}
                 className={`
-                  w-10 h-10 sm:w-14 sm:h-14 rounded-lg flex items-center justify-center font-bold text-lg sm:text-2xl border-b-[6px] transition-all duration-75 shadow-md
-                  ${isActive 
-                    ? 'bg-red-500 text-white border-red-700 transform translate-y-2 shadow-[0_0_20px_#ef4444] border-b-0' 
+                  w-8 h-10 rounded flex items-center justify-center font-bold text-sm border-b-4 transition-all duration-75 shadow-sm
+                  ${isHighlight 
+                    ? 'bg-blue-500 text-white border-blue-700 transform translate-y-1 shadow-[0_0_15px_#3b82f6] border-b-0' 
                     : 'bg-white text-slate-600 border-slate-300'}
                 `}
               >
@@ -294,30 +347,34 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
     if (battleState.isOver || countdown > 0) return;
     
     const val = e.target.value;
-    if (!/^[a-zA-Z0-9]*$/.test(val)) return;
+    // 記号も許可するように正規表現を緩和
+    if (!/^[ -~]*$/.test(val)) return;
 
     // 数字キー
     const num = parseInt(val.slice(-1));
-    if (!isNaN(num)) {
+    if (!isNaN(num) && val.length > typed.length && /^[0-9]$/.test(val.slice(-1))) {
        setHighlightedKey(String(num));
        setTimeout(() => setHighlightedKey(null), 150);
 
-       if (num > 0) {
-           const consumables = inventory.filter(i => i.type === 'CONSUMABLE');
-           if (consumables[num - 1]) {
-             handleUseItem(consumables[num - 1]);
+       if (num > 0 && num <= 9) {
+           // タイプすべき文字と一致する場合はアイテムショートカットを発動させない
+           const targetRomaji = enemy.word.romaji;
+           const expectedChar = targetRomaji[typed.length];
+           
+           if (String(num) !== expectedChar) {
+             const consumables = inventory.filter(i => i.type === 'CONSUMABLE');
+             if (consumables[num - 1]) {
+               handleUseItem(consumables[num - 1]);
+               return;
+             }
            }
        }
-       return;
     }
-
-    if (/[0-9]/.test(val)) return;
 
     if (val.length > typed.length) {
        const addedChar = val.slice(-1);
-       const upperChar = addedChar.toUpperCase();
-       
-       setHighlightedKey(upperChar);
+       // ハイライトは大文字小文字を区別してそのまま渡す
+       setHighlightedKey(addedChar);
        setTimeout(() => setHighlightedKey(null), 150);
 
        const targetRomaji = enemy.word.romaji;
@@ -341,7 +398,7 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
           const w = enemy.word.display;
           missedWords.current[w] = (missedWords.current[w] || 0) + 1;
 
-          // 苦手キー記録 (正解のキーを記録すべきか、間違えて押したキーか。一般的に「どのキーでミスったか」より「どのキーを打つべき時にミスったか」の方が有益なのでexpectedCharを記録)
+          // 苦手キー記録
           const k = expectedChar.toUpperCase();
           missedKeys.current[k] = (missedKeys.current[k] || 0) + 1;
 

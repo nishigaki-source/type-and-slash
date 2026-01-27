@@ -1,5 +1,4 @@
-// src/utils/gameLogic.js
-import { CONSUMABLES, ITEM_TYPES, RARITY, JOBS, RACES, PERSONALITIES, GROWTH } from '../constants/data';
+import { CONSUMABLES, ITEM_TYPES, RARITY, JOBS, RACES, PERSONALITIES, GROWTH, ARENA_RANKS, RACE_ADVANTAGES, JOB_ADVANTAGES } from '../constants/data';
 
 export const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -81,10 +80,10 @@ export const generateItem = (playerLevel, jobType = null) => {
         targetJob = JOBS[jobKeys[Math.floor(Math.random() * jobKeys.length)]].id;
      }
      
-     jobReq = [targetJob]; // その職業専用にする
+     // IDではなくKey(大文字)で保存するよう修正推奨だが、既存ロジックに合わせて小文字IDを使用
+     jobReq = [targetJob]; 
 
      if (targetJob === 'fighter') {
-       // ファイターは剣か盾
        if (Math.random() < 0.7) {
          name = `${adj}剣`;
          stats.atk = baseVal;
@@ -112,7 +111,6 @@ export const generateItem = (playerLevel, jobType = null) => {
        stats.atk = baseVal;
      }
   } 
-  // 頭防具の生成 (職業制限あり)
   else if (typeKey === 'HEAD') {
     const jobKeys = Object.keys(JOBS);
     const targetJob = JOBS[jobKeys[Math.floor(Math.random() * jobKeys.length)]].id;
@@ -127,19 +125,16 @@ export const generateItem = (playerLevel, jobType = null) => {
     stats.def = Math.floor(baseVal * 0.5);
     stats.wt = baseWt;
   } 
-  // 身体防具 (全職共通)
   else if (typeKey === 'BODY') {
     name = `${adj}鎧`;
     stats.def = baseVal;
     stats.wt = baseWt + 4;
   } 
-  // 足防具 (全職共通)
   else if (typeKey === 'FEET') {
     name = `${adj}靴`;
     stats.def = Math.floor(baseVal * 0.3);
     stats.wt = Math.max(0, baseWt - 2);
   } 
-  // アクセサリー (全職共通)
   else {
     name = `${adj}指輪`;
     stats.atk = Math.floor(baseVal * 0.2);
@@ -147,7 +142,6 @@ export const generateItem = (playerLevel, jobType = null) => {
     stats.wt = 0;
   }
 
-  // LRの場合の特別処理
   let uniqueCode = null;
   if (rarity.id === 'lr') {
     stats.wt = Math.max(0, stats.wt - 5);
@@ -164,11 +158,10 @@ export const generateItem = (playerLevel, jobType = null) => {
     value: baseVal * 10 * RARITY[rarity.id.toUpperCase()].priceMod,
     jobReq,
     uniqueCode,
-    locked: false // ロックフラグ初期値
+    locked: false 
   };
 };
 
-// ステータス計算 (初期値)
 export const calcInitialStats = (jobId, raceId, persId) => {
   const job = JOBS[jobId];
   const race = RACES[raceId];
@@ -188,7 +181,6 @@ export const calcInitialStats = (jobId, raceId, persId) => {
   };
 };
 
-// ステータス成長
 export const growStats = (currentStats, jobId, levelsToGrow = 1) => {
   const job = JOBS[jobId];
   const newStats = { ...currentStats };
@@ -254,7 +246,6 @@ export const calculateEffectiveStats = (player, equipped, buffs = {}) => {
   };
 };
 
-// スコア計算
 export const calculateScore = (stage, clearTimeMs, missCount) => {
   const baseScore = stage * 1000;
   const standardTimeMs = 50000 + (stage * 5000); 
@@ -263,15 +254,58 @@ export const calculateScore = (stage, clearTimeMs, missCount) => {
   return Math.max(0, baseScore + timeBonus - missPenalty);
 };
 
-// 分間タイプ数
 export const calculateCPM = (charCount, timeMs) => {
   if (timeMs <= 0) return 0;
   const minutes = timeMs / 60000;
   return parseFloat((charCount / minutes).toFixed(1));
 };
 
-// 日付フォーマット
 export const getTodayString = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+export const getArenaRank = (points) => {
+  const pt = points || 0;
+  for (let i = ARENA_RANKS.length - 1; i >= 0; i--) {
+    if (pt >= ARENA_RANKS[i].min) {
+      return ARENA_RANKS[i];
+    }
+  }
+  return ARENA_RANKS[0];
+};
+
+// ★安全な相性ダメージ倍率計算 (大文字小文字対応 & 詳細返却)
+export const calculateDamageMultiplier = (attacker, defender) => {
+  let multiplier = 1.0;
+  let reasons = []; // 倍率増加の理由を記録
+
+  if (!attacker || !defender) return { multiplier, reasons };
+
+  // 安全にキーを取得 (大文字化)
+  const atkRace = attacker.race ? attacker.race.toUpperCase() : '';
+  const defRace = defender.race ? defender.race.toUpperCase() : '';
+  const atkJob = attacker.job ? attacker.job.toUpperCase() : '';
+  const defJob = defender.job ? defender.job.toUpperCase() : '';
+
+  // 種族相性チェック
+  if (atkRace && defRace && RACE_ADVANTAGES[atkRace]) {
+    if (RACE_ADVANTAGES[atkRace].includes(defRace)) {
+      multiplier *= 1.2;
+      reasons.push('種族有利');
+    }
+  }
+
+  // 職業相性チェック
+  if (atkJob && defJob && JOB_ADVANTAGES[atkJob]) {
+    if (JOB_ADVANTAGES[atkJob].includes(defJob)) {
+      multiplier *= 1.2;
+      reasons.push('職業有利');
+    }
+  }
+
+  // 小数点以下の誤差を綺麗にする (例: 1.43999 -> 1.44)
+  multiplier = Math.round(multiplier * 100) / 100;
+
+  return { multiplier, reasons };
 };
