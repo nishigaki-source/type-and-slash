@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  FileText, Megaphone, Mail
+  FileText, Megaphone, Mail, Settings
 } from 'lucide-react';
 
 // 分割したコンポーネントをインポート
@@ -14,16 +14,21 @@ import InventoryView from './town/InventoryView';
 import DashboardView from './town/DashboardView';
 import PlaceholderView from './town/PlaceholderView';
 import ArenaView from './town/ArenaView';
+import GachaView from './town/GachaView';
+import FriendView from './town/FriendView';
+import MailView from './town/MailView';
+import SettingsView from './town/SettingsView';
 
 const TownScreen = ({ 
   player, inventory, equipped, 
   shopItems, setShopItems, setPlayer, setInventory,
   onEquip, onUnequip, onStartBattle, onLogout, onClassChange, difficulty,
   onStartArena,
-  isGuest // 追加: ゲストフラグを受け取る
+  isGuest
 }) => {
   const [activeView, setActiveView] = useState('HOME');
   const [selectedStage, setSelectedStage] = useState(1);
+  const [chatTarget, setChatTarget] = useState(null); // チャット相手の一時保存用
 
   // アイテムロック切り替え関数
   const toggleLock = (itemId) => {
@@ -35,91 +40,83 @@ const TownScreen = ({
     }));
   };
 
+  // ホームからダンジョンへ遷移
+  const handleGoToDungeon = (stage) => {
+    setSelectedStage(stage);
+    setActiveView('DUNGEON');
+  };
+
+  // フレンド画面からチャットを開始する
+  const handleStartChat = (friend) => {
+    setChatTarget(friend);
+    setActiveView('MAIL');
+  };
+
   // 画面のレンダリング振り分け
   const renderContent = () => {
     switch(activeView) {
       case 'HOME':
-        return <HomeView />;
+        return <HomeView player={player} difficulty={difficulty} onMoveToDungeon={handleGoToDungeon} />;
       
       case 'STATUS':
-        return (
-          <StatusView 
-            player={player} 
-            equipped={equipped} 
-            onClassChange={onClassChange} 
-          />
-        );
+        return <StatusView player={player} equipped={equipped} onClassChange={onClassChange} />;
       
       case 'SHOP':
-        return (
-          <ShopView 
-            player={player} 
-            inventory={inventory} 
-            equipped={equipped} 
-            shopItems={shopItems} 
-            setShopItems={setShopItems} 
-            setPlayer={setPlayer} 
-            setInventory={setInventory} 
-          />
-        );
+        return <ShopView player={player} inventory={inventory} equipped={equipped} shopItems={shopItems} setShopItems={setShopItems} setPlayer={setPlayer} setInventory={setInventory} />;
       
       case 'TRADE':
-        // 念のためここでもガード（UI側で無効化されるが、直接指定された場合など）
-        if (isGuest) return <HomeView />;
-        return (
-          <TradeView 
-            player={player} 
-            inventory={inventory} 
-            equipped={equipped} 
-            setPlayer={setPlayer} 
-            setInventory={setInventory} 
-          />
-        );
+        if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
+        return <TradeView player={player} inventory={inventory} equipped={equipped} setPlayer={setPlayer} setInventory={setInventory} />;
       
       case 'DUNGEON':
-        return (
-          <DungeonView 
-            player={player} 
-            selectedStage={selectedStage} 
-            setSelectedStage={setSelectedStage} 
-            onStartBattle={onStartBattle} 
-          />
-        );
+        return <DungeonView player={player} selectedStage={selectedStage} setSelectedStage={setSelectedStage} onStartBattle={onStartBattle} difficulty={difficulty} />;
       
       case 'ITEM':
-        return (
-          <InventoryView 
-            player={player} 
-            inventory={inventory} 
-            equipped={equipped} 
-            onEquip={onEquip} 
-            onUnequip={onUnequip} 
-            toggleLock={toggleLock}
-          />
-        );
+        return <InventoryView player={player} inventory={inventory} equipped={equipped} onEquip={onEquip} onUnequip={onUnequip} toggleLock={toggleLock} />;
       
       case 'ACHIEVEMENT':
         return <DashboardView player={player} />;
       
       case 'ARENA': 
-        if (isGuest) return <HomeView />;
-        return (
-          <ArenaView 
-            player={player} 
-            equipped={equipped} 
-            userId={player.id || 'guest'}
-            onStartMatch={onStartArena} 
-          />
-        );
+        if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
+        return <ArenaView player={player} equipped={equipped} userId={player.id || 'guest'} onStartMatch={onStartArena} />;
+
+      case 'GACHA':
+        return <GachaView player={player} setPlayer={setPlayer} setInventory={setInventory} />;
 
       case 'QUEST':
         return <PlaceholderView title="クエスト" icon={<FileText size={48}/>} />;
       
+      case 'FRIEND':
+        if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
+        return (
+          <FriendView 
+            player={player} 
+            inventory={inventory}
+            setInventory={setInventory}
+            onStartChat={handleStartChat} 
+          />
+        );
+
+      case 'MAIL':
+        if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
+        return (
+          <MailView 
+            player={player} 
+            initialTarget={chatTarget} 
+            onClose={() => { setChatTarget(null); setActiveView('FRIEND'); }}
+          />
+        );
+
       case 'INFO':
         return <PlaceholderView title="お知らせ" icon={<Megaphone size={48}/>} />;
       
+      case 'SETTINGS':
+        // ★修正: setPlayerを渡す
+        return <SettingsView player={player} setPlayer={setPlayer} />;
+      
       default:
-        return <HomeView />;
+        return <HomeView player={player} difficulty={difficulty} onMoveToDungeon={handleGoToDungeon} />;
     }
   };
 
@@ -137,7 +134,7 @@ const TownScreen = ({
         setActiveView={setActiveView} 
         onLogout={onLogout} 
         difficulty={difficulty} 
-        isGuest={isGuest} // 追加: サイドバーへ渡す
+        isGuest={isGuest}
       />
     </div>
   );

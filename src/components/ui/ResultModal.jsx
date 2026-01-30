@@ -1,11 +1,13 @@
-// src/components/ui/ResultModal.jsx
 import React from 'react';
 import { Trophy, Skull, Coins } from 'lucide-react';
 import { RARITY } from '../../constants/data';
 
 const ResultModal = ({ message, onClose, onTown }) => {
   if (!message) return null;
-  const { type, title, gold, item, levelUpInfo } = message;
+  
+  // item (単体) がある場合は items (配列) に変換して扱う
+  const { type, title, gold, item, items, levelUpInfo } = message;
+  const rewardItems = items || (item ? [item] : []);
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in">
@@ -34,20 +36,32 @@ const ResultModal = ({ message, onClose, onTown }) => {
               <span className="text-slate-500">獲得ゴールド</span>
               <span className="text-yellow-600 font-bold flex items-center gap-1">+{gold} <Coins size={14}/></span>
             </div>
-            <div className="bg-slate-50 p-4 rounded border border-slate-200 text-left">
-              <div className="text-xs text-slate-500 mb-2 text-center">獲得アイテム</div>
-              <div className={`text-xl font-bold ${item.type === 'CONSUMABLE' ? 'text-green-600' : RARITY[item.rarity.toUpperCase()].color} mb-2 text-center`}>{item.name}</div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
-                  {item.type === 'CONSUMABLE' ? (
-                    <div className="col-span-2 text-center">消耗品</div>
-                  ) : (
-                    <>
-                      {(item.stats?.atk || 0) > 0 && <span>ATK:{item.stats.atk}</span>}
-                      {(item.stats?.def || 0) > 0 && <span>DEF:{item.stats.def}</span>}
-                      <span>WT:{item.stats?.wt || 0}</span>
-                    </>
+            
+            <div className="text-xs text-slate-500 text-left font-bold mb-1">獲得アイテム</div>
+            <div className="space-y-2">
+              {rewardItems.map((reward, index) => (
+                <div key={reward.id || index} className="bg-slate-50 p-3 rounded border border-slate-200 text-left flex justify-between items-center">
+                  <div>
+                    <div className={`text-sm font-bold ${reward.type === 'CONSUMABLE' ? 'text-green-600' : RARITY[reward.rarity.toUpperCase()].color}`}>
+                      {reward.name}
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                      {reward.type === 'CONSUMABLE' ? '消耗品' : (
+                        <>
+                          {(reward.stats?.atk || 0) > 0 && <span>ATK:{reward.stats.atk} </span>}
+                          {(reward.stats?.def || 0) > 0 && <span>DEF:{reward.stats.def} </span>}
+                          <span>WT:{reward.stats?.wt || 0}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {reward.type !== 'CONSUMABLE' && (
+                    <span className={`text-[10px] px-2 py-1 rounded bg-white border ${RARITY[reward.rarity.toUpperCase()].color.replace('text', 'border')}`}>
+                      {reward.rarity.toUpperCase()}
+                    </span>
                   )}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

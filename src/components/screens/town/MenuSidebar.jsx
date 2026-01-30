@@ -1,17 +1,18 @@
 import React from 'react';
 import { 
-  ShoppingBag, Mail, Trophy, FileText, 
-  Megaphone, User, LogOut, Sword, Backpack, 
-  ArrowLeftRight, Coins, Swords, Lock
+  ShoppingBag, Trophy, Users, // FileText(クエスト)を削除しUsers(フレンド)を追加
+  User, LogOut, Sword, Backpack, 
+  ArrowLeftRight, Coins, Swords, Lock,
+  Gift, Mail, Megaphone, Settings
 } from 'lucide-react';
 import { JOBS } from '../../../constants/data';
 
-// MenuButtonコンポーネントを拡張してdisabledに対応
+// MenuButtonコンポーネント
 const MenuButton = ({ icon, label, onClick, active = false, color = "bg-slate-800 hover:bg-slate-700", disabled = false }) => (
   <button 
     onClick={disabled ? null : onClick}
     className={`
-      aspect-square flex flex-col items-center justify-center gap-2 rounded-lg border transition-all duration-200
+      aspect-square flex flex-col items-center justify-center gap-1 rounded-lg border transition-all duration-200
       ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]' : 
         disabled ? 'bg-slate-800/50 border-slate-700/50 text-slate-600 cursor-not-allowed' : 
         `${color} border-slate-700 text-slate-300`}
@@ -19,9 +20,9 @@ const MenuButton = ({ icon, label, onClick, active = false, color = "bg-slate-80
     title={disabled ? "ログインが必要です" : ""}
   >
     <div className={active ? 'animate-bounce-slow' : ''}>
-      {disabled ? <Lock size={24} className="opacity-50"/> : icon}
+      {disabled ? <Lock size={20} className="opacity-50"/> : React.cloneElement(icon, { size: 20 })}
     </div>
-    <span className={`text-xs font-bold ${disabled ? 'text-slate-600' : ''}`}>{label}</span>
+    <span className={`text-[10px] font-bold ${disabled ? 'text-slate-600' : ''}`}>{label}</span>
   </button>
 );
 
@@ -58,45 +59,73 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, 
          </div>
       </div>
 
-      {/* 3x3 メニューグリッド */}
+      {/* メニューグリッド (3列 x 4行) */}
       <div className="p-2 flex-1 overflow-y-auto flex flex-col">
          <div className="grid grid-cols-3 gap-2 content-start mb-auto">
-            {/* 上段 */}
-            <MenuButton icon={<ShoppingBag size={24} />} label="ショップ" onClick={() => setActiveView('SHOP')} active={activeView === 'SHOP'} />
-            <MenuButton icon={<Backpack size={24} />} label="アイテム" onClick={() => setActiveView('ITEM')} active={activeView === 'ITEM'} />
             
-            {/* トレードボタン (ゲスト時は無効化) */}
+            {/* 1行目 */}
             <MenuButton 
-              icon={<ArrowLeftRight size={24} />} 
-              label="トレード" 
-              onClick={() => setActiveView('TRADE')} 
-              active={activeView === 'TRADE'} 
-              color="bg-green-800/40 hover:bg-green-800/60 border-green-900" 
-              disabled={isGuest}
+              icon={<Sword />} 
+              label="ダンジョン" 
+              onClick={() => setActiveView('DUNGEON')} 
+              active={activeView === 'DUNGEON'} 
+              color="bg-red-900/40 hover:bg-red-900/60 border-red-900" 
             />
-            
-            {/* 中段 */}
-            <MenuButton icon={<Sword size={24} />} label="ダンジョン" onClick={() => setActiveView('DUNGEON')} active={activeView === 'DUNGEON'} color="bg-red-900/40 hover:bg-red-900/60 border-red-900" />
-            <MenuButton icon={<FileText size={24} />} label="クエスト" onClick={() => setActiveView('QUEST')} active={activeView === 'QUEST'} />
-            <MenuButton icon={<Trophy size={24} />} label="実績" onClick={() => setActiveView('ACHIEVEMENT')} active={activeView === 'ACHIEVEMENT'} />
-            
-            {/* 下段 */}
-            <MenuButton icon={<User size={24} />} label="ステータス" onClick={() => setActiveView('STATUS')} active={activeView === 'STATUS'} />
-            
-            {/* アリーナボタン (ゲスト時は無効化) */}
             <MenuButton 
-              icon={<Swords size={24} />} 
+              icon={<Swords />} 
               label="アリーナ" 
               onClick={() => setActiveView('ARENA')} 
               active={activeView === 'ARENA'} 
               color="bg-purple-900/40 hover:bg-purple-900/60 border-purple-900" 
               disabled={isGuest} 
             />
+            <MenuButton 
+              icon={<Gift />} 
+              label="ガチャ" 
+              onClick={() => setActiveView('GACHA')} 
+              active={activeView === 'GACHA'} 
+              color="bg-indigo-900/40 hover:bg-indigo-900/60 border-indigo-900"
+            />
+
+            {/* 2行目 */}
+            <MenuButton icon={<ShoppingBag />} label="ショップ" onClick={() => setActiveView('SHOP')} active={activeView === 'SHOP'} />
+            <MenuButton icon={<Backpack />} label="アイテム" onClick={() => setActiveView('ITEM')} active={activeView === 'ITEM'} />
             
-            <MenuButton icon={<Megaphone size={24} />} label="お知らせ" onClick={() => setActiveView('INFO')} active={activeView === 'INFO'} />
+            {/* ★修正: クエスト(FileText)をフレンド(Users)に変更 */}
+            <MenuButton 
+              icon={<Users />} 
+              label="フレンド" 
+              onClick={() => setActiveView('FRIEND')} 
+              active={activeView === 'FRIEND'} 
+              color="bg-teal-900/40 hover:bg-teal-900/60 border-teal-900"
+              disabled={isGuest}
+            />
+
+            {/* 3行目 */}
+            <MenuButton 
+              icon={<ArrowLeftRight />} 
+              label="トレード" 
+              onClick={() => setActiveView('TRADE')} 
+              active={activeView === 'TRADE'} 
+              color="bg-green-800/40 hover:bg-green-800/60 border-green-900" 
+              disabled={isGuest}
+            />
+            <MenuButton icon={<User />} label="キャラクタ" onClick={() => setActiveView('STATUS')} active={activeView === 'STATUS'} />
+            <MenuButton icon={<Trophy />} label="実績" onClick={() => setActiveView('ACHIEVEMENT')} active={activeView === 'ACHIEVEMENT'} />
+
+            {/* 4行目 */}
+            <MenuButton 
+              icon={<Mail />} 
+              label="メール" 
+              onClick={() => setActiveView('MAIL')} 
+              active={activeView === 'MAIL'} 
+              disabled={isGuest}
+            />
+            <MenuButton icon={<Megaphone />} label="お知らせ" onClick={() => setActiveView('INFO')} active={activeView === 'INFO'} />
+            <MenuButton icon={<Settings />} label="設定" onClick={() => setActiveView('SETTINGS')} active={activeView === 'SETTINGS'} />
+
          </div>
          
-         {/* ログアウトボタン */}
          <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
            <button onClick={() => setActiveView('HOME')} className={`w-full py-2 rounded text-sm font-bold transition-colors ${activeView === 'HOME' ? 'text-slate-500 cursor-default' : 'text-blue-400 hover:text-blue-300 hover:bg-slate-800'}`}>HOME</button>
            <button onClick={onLogout} className="w-full py-2 rounded text-sm font-bold text-slate-500 hover:text-red-400 hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"><LogOut size={16}/> ログアウト</button>

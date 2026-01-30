@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "type-and-slash-game"
-  }
+    "default": "type-and-slash-game",
+    "firebase use --add": "type-and-slash-game"
+  },
+  "targets": {},
+  "etags": {}
 }

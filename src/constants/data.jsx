@@ -21,7 +21,7 @@ export const ARENA_RANKS = [
   { id: 'CHAMPION', name: 'チャンピオン', min: 9500, max: 9999999, color: 'text-red-500', icon: 'Kg' },
 ];
 
-// ★修正: 種族の相性定義 (4すくみに変更)
+// 種族の相性定義 (4すくみ)
 export const RACE_ADVANTAGES = {
   HUMAN: ['ELF'],    // 人間 -> エルフ
   ELF: ['DEMON'],    // エルフ -> 魔族
@@ -97,120 +97,269 @@ export const PERSONALITIES = {
   FLEXIBLE: { id: 'flexible', name: '柔軟', bonusStat: 'dex' },
 };
 
+// 難易度・ゾーン定義
+export const DIFFICULTY_SETTINGS = {
+  EASY: {
+    target: "初心者・低学年",
+    zones: [
+      {
+        id: 1, name: "はじまりの洞窟", range: [1, 20],
+        features: "基礎・指慣らし (1〜2文字)",
+        zako: [ // 1-2文字、母音・清音
+          { display: 'あ', romaji: 'a' }, { display: 'い', romaji: 'i' }, { display: 'う', romaji: 'u' }, 
+          { display: 'え', romaji: 'e' }, { display: 'お', romaji: 'o' }, { display: 'か', romaji: 'ka' },
+          { display: 'き', romaji: 'ki' }, { display: 'く', romaji: 'ku' }, { display: 'け', romaji: 'ke' },
+          { display: 'こ', romaji: 'ko' }, { display: 'さ', romaji: 'sa' }, { display: 'し', romaji: 'shi' },
+          { display: 'た', romaji: 'ta' }, { display: 'ち', romaji: 'chi' }, { display: 'な', romaji: 'na' },
+          { display: 'うし', romaji: 'ushi' }, { display: 'かめ', romaji: 'kame' }, { display: 'さる', romaji: 'saru' },
+          { display: 'くま', romaji: 'kuma' }, { display: 'とり', romaji: 'tori' }, { display: 'はな', romaji: 'hana' }
+        ],
+        boss: [ // 3文字 簡単な単語
+          { display: 'あお', romaji: 'ao' }, { display: 'かき', romaji: 'kaki' }, { display: 'すし', romaji: 'sushi' },
+          { display: 'あか', romaji: 'aka' }, { display: 'くつ', romaji: 'kutsu' }, { display: 'みみ', romaji: 'mimi' },
+          { display: 'ゆめ', romaji: 'yume' }, { display: 'そら', romaji: 'sora' }, { display: 'うみ', romaji: 'umi' }
+        ]
+      },
+      {
+        id: 2, name: "迷いの森", range: [21, 40],
+        features: "拗音・濁音・少し長い単語",
+        zako: [ // 3-4文字 濁音・半濁音・撥音
+          { display: 'りんご', romaji: 'ringo' }, { display: 'めがね', romaji: 'megane' }, { display: 'みかん', romaji: 'mikan' },
+          { display: 'ごはん', romaji: 'gohan' }, { display: 'ぱんだ', romaji: 'panda' }, { display: 'ぎんこう', romaji: 'ginkou' },
+          { display: 'えんぴつ', romaji: 'enpitsu' }, { display: 'てんぷら', romaji: 'tenpura' },
+          { display: 'がらす', romaji: 'garasu' }, { display: 'じしょ', romaji: 'jisho' }, { display: 'でんわ', 'romaji': 'denwa' }
+        ],
+        boss: [ // 5文字
+          { display: 'ぱいなっぷる', romaji: 'painappuru' }, { display: 'さんぐらす', romaji: 'sangurasu' },
+          { display: 'はんばーぐ', romaji: 'hanbaagu' }, { display: 'ぷれぜんと', romaji: 'purezento' },
+          { display: 'おにぎり', romaji: 'onigiri' }, { display: 'ひまわり', romaji: 'himawari' }
+        ]
+      },
+      {
+        id: 3, name: "試練の砂漠", range: [41, 60],
+        features: "拗音・促音を含む単語",
+        zako: [ // 4-6文字 拗音・促音
+          { display: 'きっさてん', romaji: 'kissaten' }, { display: 'ちきゅう', romaji: 'chikyuu' },
+          { display: 'がっこう', romaji: 'gakkou' }, { display: 'びょういん', romaji: 'byouin' },
+          { display: 'きっぷ', romaji: 'kippu' }, { display: 'ちょこれーと', romaji: 'chokoreito' },
+          { display: 'しゃしん', romaji: 'shashin' }, { display: 'しゅくだい', romaji: 'shukudai' }
+        ],
+        boss: [ // 7文字以上 拗音含む
+          { display: 'ちゅうしゃじょう', romaji: 'chuushajou' }, { display: 'しょうぼうしゃ', romaji: 'shoubousha' },
+          { display: 'きゅうきゅうしゃ', romaji: 'kyuukyuusha' }, { display: 'びじゅつかん', romaji: 'bijutsukan' },
+          { display: 'ゆうえんち', romaji: 'yuuenchi' }, { display: 'どうぶつえん', romaji: 'doubutsuen' }
+        ]
+      },
+      {
+        id: 4, name: "灼熱の火山", range: [61, 80],
+        features: "短文・文章・スピード勝負",
+        zako: [ // 短文（句読点なし）
+          { display: 'おはようございます', romaji: 'ohayougozaimasu' }, { display: 'こんにちは', romaji: 'konnichiwa' },
+          { display: 'おやすみなさい', romaji: 'oyasuminasai' }, { display: 'いただきます', romaji: 'itadakimasu' },
+          { display: 'ごちそうさまでした', romaji: 'gochisousamadeshita' }, { display: 'ありがとう', romaji: 'arigatou' },
+          { display: 'さようなら', romaji: 'sayounara' }, { display: 'はじめまして', romaji: 'hajimemashite' }
+        ],
+        boss: [ // 2文節（スペースあり）
+          { display: 'あしたは　はれです', romaji: 'ashitaha haredesu' },
+          { display: 'きょうは　あめです', romaji: 'kyouha amedesu' },
+          { display: 'いっしょに　あそぼう', romaji: 'isshoni asobou' },
+          { display: 'ごはんを　たべる', romaji: 'gohanwo taberu' }, { display: 'ほんを　よむ', romaji: 'honwo yomu' }
+        ]
+      },
+      {
+        id: 5, name: "奈落の最深部", range: [81, 100],
+        features: "長文・難読・複雑な文章",
+        zako: [ // 長めの文章
+          { display: 'むかしむかしあるところに', romaji: 'mukashimukashiarutokoroni' },
+          { display: 'あるひもりのなかで', romaji: 'aruhimorinonakade' },
+          { display: 'くまさんに出会いました', romaji: 'kumasannideaimashita' },
+          { display: 'おじいさんとおばあさんが', romaji: 'ojiisantoobaasanga' }
+        ],
+        boss: [ // 超長文
+          { display: 'おじいさんはやまへしばかりに', romaji: 'ojiisanhayamaheshibakarini' },
+          { display: 'おばあさんはかわへせんたくに', romaji: 'obaasanhakawahesentakuni' },
+          { display: 'いつまでもいつまでもしあわせに', romaji: 'itsumademoitsumademoshiawaseni' },
+          { display: 'めでたしめでたし', romaji: 'medetashimedetashi' }
+        ]
+      }
+    ]
+  },
+  NORMAL: {
+    target: "中高学年〜大人",
+    zones: [
+      {
+        id: 1, name: "はじまりの洞窟", range: [1, 20],
+        features: "生活単語・名詞・複合名詞",
+        zako: [ // 生活単語・名詞
+          { display: '学校', romaji: 'gakkou' }, { display: '野菜', romaji: 'yasai' }, { display: '冒険', romaji: 'bouken' },
+          { display: '携帯', romaji: 'keitai' }, { display: '時計', romaji: 'tokei' }, { display: '電車', romaji: 'densha' },
+          { display: '電話', romaji: 'denwa' }, { display: '眼鏡', romaji: 'megane' }, { display: '帽子', romaji: 'boushi' }
+        ],
+        boss: [ // 複合名詞
+          { display: '電気自動車', romaji: 'denkijidousha' }, { display: '夏休み', romaji: 'natsuyasumi' },
+          { display: '修学旅行', romaji: 'shuugakuryokou' }, { display: '宇宙飛行士', romaji: 'uchuuhikoushi' },
+          { display: '消防自動車', romaji: 'shouboujidousha' }, { display: '郵便局', romaji: 'yuubinkyoku' }
+        ]
+      },
+      {
+        id: 2, name: "迷いの森", range: [21, 40],
+        features: "熟語・ことわざ・慣用句",
+        zako: [ // 二字・四字熟語
+          { display: '平和', romaji: 'heiwa' }, { display: '一石二鳥', romaji: 'issekinichou' },
+          { display: '自由', romaji: 'jiyuu' }, { display: '一期一会', romaji: 'ichigoichie' },
+          { display: '科学', romaji: 'kagaku' }, { display: '東奔西走', romaji: 'touhonseisou' },
+          { display: '油断大敵', romaji: 'yudantaiteki' }, { display: '四面楚歌', romaji: 'shimensoka' }
+        ],
+        boss: [ // ことわざ・慣用句
+          { display: '猿も木から落ちる', romaji: 'sarumokikaraochiru' },
+          { display: '犬も歩けば棒に当たる', romaji: 'inumoarukebabouniataru' },
+          { display: '鬼に金棒', romaji: 'oninikanabou' }, { display: '花より団子', romaji: 'hanayoridango' },
+          { display: '早起きは三文の徳', romaji: 'hayaokihasanmonnotoku' }
+        ]
+      },
+      {
+        id: 3, name: "試練の砂漠", range: [41, 60],
+        features: "理科・社会用語・長い名称",
+        zako: [ // 理科・社会用語
+          { display: '織田信長', romaji: 'odanobunaga' }, { display: '光合成', romaji: 'kougousei' },
+          { display: '徳川家康', romaji: 'tokugawaieyasu' }, { display: '二酸化炭素', romaji: 'nisankatanso' },
+          { display: '北海道', romaji: 'hokkaidou' }, { display: '顕微鏡', romaji: 'kenbikyou' },
+          { display: '豊臣秀吉', romaji: 'toyotomihideyoshi' }, { display: '酸素', romaji: 'sanso' }
+        ],
+        boss: [ // 長い名称
+          { display: '聖徳太子', romaji: 'shoutokutaishi' }, { display: 'オーストラリア', romaji: 'oosutoraria' },
+          { display: 'フランシスコ・ザビエル', romaji: 'furanshisukozabieru' },
+          { display: '中華人民共和国', romaji: 'chuukajinminkyouwakoku' },
+          { display: 'アメリカ合衆国', romaji: 'amerikagasshuukoku' }
+        ]
+      },
+      {
+        id: 4, name: "灼熱の火山", range: [61, 80],
+        features: "日常会話・ビジネス・敬語",
+        zako: [ // 日常・ビジネス
+          { display: 'ありがとうございます', romaji: 'arigatougozaimasu' },
+          { display: 'よろしくお願いします', romaji: 'yoroshikuonegaishimasu' },
+          { display: '申し訳ございません', romaji: 'moushiwakegozaimasen' },
+          { display: '承知いたしました', romaji: 'shouchiitashimashita' },
+          { display: 'お疲れ様です', romaji: 'otsukaresamadesu' }, { display: '失礼いたします', romaji: 'shitsureiitashimasu' }
+        ],
+        boss: [ // メール件名・挨拶
+          { display: 'お世話になっております', romaji: 'osewaninatteorimasu' },
+          { display: 'ご確認をお願いいたします', romaji: 'gokakuninoonegaiitashimasu' },
+          { display: 'お問い合わせについて', romaji: 'otoiawasenitsuite' },
+          { display: '会議のお知らせ', romaji: 'kaiginooshirase' }
+        ]
+      },
+      {
+        id: 5, name: "奈落の最深部", range: [81, 100],
+        features: "論説・ニュース・小説",
+        zako: [ // ニュース・小説
+          { display: '我輩は猫である', romaji: 'wagahaihanekodearu' },
+          { display: '国境の長いトンネルを抜けると', romaji: 'kokkyounonagaitonneruwnukeruto' },
+          { display: '情けは人の為ならず', romaji: 'nasakehahitonotamenarazu' },
+          { display: '春はあけぼの', romaji: 'haruhaakebono' }
+        ],
+        boss: [ // 論説・激ムズ
+          { display: '内閣府は経済統計を発表した', romaji: 'naikakuhuhakeizaitoukeiwwohappyouashita' },
+          { display: '祇園精舎の鐘の声', romaji: 'gionshoujanokanenokoe' },
+          { display: '諸行無常の響きあり', romaji: 'shogyoumujounohibikiari' },
+          { display: '為替相場は円安ドル高', romaji: 'kawasesoubahaenyasudorudaka' }
+        ]
+      }
+    ]
+  },
+  HARD: {
+    target: "プログラマ・高学年",
+    zones: [
+      {
+        id: 1, name: "はじまりの洞窟", range: [1, 20],
+        features: "英単語 (3〜5文字)",
+        zako: [ // 3-5文字
+          { display: 'cat', romaji: 'cat' }, { display: 'book', romaji: 'book' }, { display: 'play', romaji: 'play' },
+          { display: 'dog', romaji: 'dog' }, { display: 'blue', romaji: 'blue' }, { display: 'jump', romaji: 'jump' },
+          { display: 'run', romaji: 'run' }, { display: 'eat', romaji: 'eat' }, { display: 'see', romaji: 'see' },
+          { display: 'red', romaji: 'red' }, { display: 'one', romaji: 'one' }, { display: 'cup', romaji: 'cup' }
+        ],
+        boss: [ // 8文字以上
+          { display: 'beautiful', romaji: 'beautiful' }, { display: 'elephant', romaji: 'elephant' },
+          { display: 'computer', romaji: 'computer' }, { display: 'yesterday', romaji: 'yesterday' },
+          { display: 'tomorrow', romaji: 'tomorrow' }, { display: 'important', romaji: 'important' }
+        ]
+      },
+      {
+        id: 2, name: "迷いの森", range: [21, 40],
+        features: "頭文字大文字・All Caps",
+        zako: [ // 頭文字大文字
+          { display: 'Sunday', romaji: 'Sunday' }, { display: 'Japan', romaji: 'Japan' }, { display: 'Tom', romaji: 'Tom' },
+          { display: 'Monday', romaji: 'Monday' }, { display: 'Tokyo', romaji: 'Tokyo' }, { display: 'London', romaji: 'London' },
+          { display: 'Paris', romaji: 'Paris' }, { display: 'China', romaji: 'China' }, { display: 'India', romaji: 'India' }
+        ],
+        boss: [ // All Caps
+          { display: 'WARNING', romaji: 'WARNING' }, { display: 'DANGER', romaji: 'DANGER' },
+          { display: 'CAUTION', romaji: 'CAUTION' }, { display: 'GAME OVER', romaji: 'GAMEOVER' },
+          { display: 'SUCCESS', romaji: 'SUCCESS' }, { display: 'ERROR', romaji: 'ERROR' }
+        ]
+      },
+      {
+        id: 3, name: "試練の砂漠", range: [41, 60],
+        features: "英単語＋数字・日付・式",
+        zako: [ // 英単語＋数字
+          { display: 'Room 101', romaji: 'Room101' }, { display: 'iPhone 15', romaji: 'iPhone15' },
+          { display: 'Level 99', romaji: 'Level99' }, { display: 'No.1', romaji: 'No.1' },
+          { display: 'Part 2', romaji: 'Part2' }, { display: 'Area 51', romaji: 'Area51' }, { display: 'R2-D2', romaji: 'R2-D2' }
+        ],
+        boss: [ // 日付・式
+          { display: '2024/01/01', romaji: '2024/01/01' }, { display: '10+5=15', romaji: '10+5=15' },
+          { display: '3.14159', romaji: '3.14159' }, { display: 'E=mc^2', romaji: 'E=mc^2' },
+          { display: '1+1=2', romaji: '1+1=2' }, { display: '1999-12-31', romaji: '1999-12-31' }
+        ]
+      },
+      {
+        id: 4, name: "灼熱の火山", range: [61, 80],
+        features: "記号・アドレス・パスワード",
+        zako: [ // アドレス・パス
+          { display: 'user@email.com', romaji: 'user@email.com' }, { display: 'https://', romaji: 'https://' },
+          { display: '#hashtag', romaji: '#hashtag' }, { display: '123_456', romaji: '123_456' },
+          { display: 'login.php', romaji: 'login.php' }, { display: 'index.html', romaji: 'index.html' }
+        ],
+        boss: [ // 複雑なパス
+          { display: 'P@ssw0rd_123!', romaji: 'P@ssw0rd_123!' },
+          { display: 'S3cur1ty#Key', romaji: 'S3cur1ty#Key' },
+          { display: 'AbC$123%Def', romaji: 'AbC$123%Def' }, { display: 'Z_345=678', romaji: 'Z_345=678' }
+        ]
+      },
+      {
+        id: 5, name: "奈落の最深部", range: [81, 100],
+        features: "プログラミングコード・構文",
+        zako: [ // 構文
+          { display: '<div></div>', romaji: '<div></div>' }, { display: 'print("Hi")', romaji: 'print("Hi")' },
+          { display: 'const x = 0;', romaji: 'constx=0;' }, { display: 'return true;', romaji: 'returntrue;' },
+          { display: 'import React', romaji: 'importReact' }, { display: 'export default', romaji: 'exportdefault' }
+        ],
+        boss: [ // 長いコード
+          { display: 'if(hp <= 0){ GameOver(); }', romaji: 'if(hp<=0){GameOver();}' },
+          { display: 'console.log("Hello World");', romaji: 'console.log("HelloWorld");' },
+          { display: 'import React from "react";', romaji: 'importReactfrom"react";' },
+          { display: 'const [s, set] = useState(0);', romaji: 'const[s,set]=useState(0);' }
+        ]
+      }
+    ]
+  }
+};
+
+// 互換性のためにフラットなリストも残す
 export const WORD_LISTS = {
-  EASY: [
-    { display: 'ねこ', romaji: 'neko' }, { display: 'いぬ', romaji: 'inu' }, { display: 'うし', romaji: 'ushi' },
-    { display: 'うま', romaji: 'uma' }, { display: 'さる', romaji: 'saru' }, { display: 'くま', romaji: 'kuma' },
-    { display: 'とり', romaji: 'tori' }, { display: 'かめ', romaji: 'kame' }, { display: 'かに', romaji: 'kani' },
-    { display: 'たこ', romaji: 'tako' }, { display: 'いか', romaji: 'ika' }, { display: 'さかな', romaji: 'sakana' },
-    { display: 'りんご', romaji: 'ringo' }, { display: 'みかん', romaji: 'mikan' }, { display: 'ぶどう', romaji: 'budou' },
-    { display: 'めろん', romaji: 'meron' }, { display: 'いちご', romaji: 'ichigo' }, { display: 'ばなな', romaji: 'banana' },
-    { display: 'とまと', romaji: 'tomato' }, { display: 'なす', romaji: 'nasu' }, { display: 'にんじん', romaji: 'ninjin' },
-    { display: 'ぱん', romaji: 'pan' }, { display: 'ごはん', romaji: 'gohan' }, { display: 'たまご', romaji: 'tamago' },
-    { display: 'みるく', romaji: 'miruku' }, { display: 'みず', romaji: 'mizu' }, { display: 'やま', romaji: 'yama' },
-    { display: 'かわ', romaji: 'kawa' }, { display: 'うみ', romaji: 'umi' }, { display: 'そら', romaji: 'sora' },
-    { display: 'はな', romaji: 'hana' }, { display: 'き', romaji: 'ki' }, { display: 'くるま', romaji: 'kuruma' },
-    { display: 'ばす', romaji: 'basu' }, { display: 'でんしゃ', romaji: 'densha' }, { display: 'ふね', romaji: 'fune' },
-    { display: 'あか', romaji: 'aka' }, { display: 'あお', romaji: 'ao' }, { display: 'しろ', romaji: 'shiro' },
-    { display: 'くろ', romaji: 'kuro' }, { display: 'ゆめ', romaji: 'yume' }, { display: 'えがお', romaji: 'egao' },
-    { display: 'げんき', romaji: 'genki' }, { display: 'おかし', romaji: 'okashi' }, { display: 'けーき', romaji: 'keiki' },
-  ],
-  NORMAL: [
-    { display: 'スライム', romaji: 'suraimu' }, { display: 'ゴブリン', romaji: 'goburin' }, { display: 'ドラゴン', romaji: 'doragon' },
-    { display: '魔法', romaji: 'mahou' }, { display: '剣', romaji: 'ken' }, { display: '冒険', romaji: 'bouken' },
-    { display: '伝説', romaji: 'densetsu' }, { display: '攻撃', romaji: 'kougeki' }, { display: '防御', romaji: 'bougyo' },
-    { display: '回復', romaji: 'kaifuku' }, { display: '宝箱', romaji: 'takarabako' }, { display: '迷宮', romaji: 'meikyuu' },
-    { display: '勇者', romaji: 'yuusha' }, { display: '魔王', romaji: 'maou' }, { display: '戦士', romaji: 'senshi' },
-    { display: '協力', romaji: 'kyouryoku' }, { display: '対戦', romaji: 'taisen' }, { display: '勝利', romaji: 'shouri' },
-    { display: '敗北', romaji: 'haiboku' }, { display: '経験値', romaji: 'keikenchi' }, { display: '覚醒', romaji: 'kakusei' },
-    { display: '疾風', romaji: 'shippuu' }, { display: '雷鳴', romaji: 'raimei' }, { display: '紅蓮', romaji: 'guren' },
-    { display: '蒼穹', romaji: 'soukyuu' },
-  ],
-  HARD: [
-    { display: 'Code', romaji: 'code' }, { display: 'React', romaji: 'react' },
-    { display: 'Vite', romaji: 'vite' }, { display: 'Component', romaji: 'component' },
-    { display: 'Props', romaji: 'props' }, { display: 'State', romaji: 'state' },
-    { display: 'Hook', romaji: 'hook' }, { display: 'Effect', romaji: 'effect' },
-    { display: 'Render', romaji: 'render' }, { display: 'Mount', romaji: 'mount' },
-    { display: 'Import', romaji: 'import' }, { display: 'Export', romaji: 'export' },
-    { display: 'Default', romaji: 'default' }, { display: 'Const', romaji: 'const' },
-    { display: 'Function', romaji: 'function' }, { display: 'Return', romaji: 'return' },
-    { display: 'Async', romaji: 'async' }, { display: 'Await', romaji: 'await' },
-    { display: 'Promise', romaji: 'promise' }, { display: 'Console', romaji: 'console' },
-    { display: 'Log', romaji: 'log' }, { display: 'Error', romaji: 'error' },
-    { display: 'Warning', romaji: 'warning' }, { display: 'Info', romaji: 'info' },
-    { display: 'Debug', romaji: 'debug' }, { display: 'Table', romaji: 'table' },
-    { display: 'Map', romaji: 'map' }, { display: 'Filter', romaji: 'filter' },
-    { display: 'Reduce', romaji: 'reduce' }, { display: 'Find', romaji: 'find' },
-    { display: 'Some', romaji: 'some' }, { display: 'Every', romaji: 'every' },
-    { display: 'Includes', romaji: 'includes' }, { display: 'IndexOf', romaji: 'indexof' },
-    { display: 'Slice', romaji: 'slice' }, { display: 'Splice', romaji: 'splice' },
-    { display: 'Push', romaji: 'push' }, { display: 'Pop', romaji: 'pop' },
-    { display: 'Shift', romaji: 'shift' }, { display: 'Unshift', romaji: 'unshift' },
-    { display: 'Join', romaji: 'join' }, { display: 'Split', romaji: 'split' },
-    { display: 'Replace', romaji: 'replace' }, { display: 'Match', romaji: 'match' },
-    { display: 'Search', romaji: 'search' }, { display: 'Test', romaji: 'test' },
-    { display: 'Exec', romaji: 'exec' }, { display: 'ToLowerCase', romaji: 'tolowercase' },
-    { display: 'ToUpperCase', romaji: 'touppercase' }, { display: 'Trim', romaji: 'trim' },
-    { display: 'Length', romaji: 'length' }, { display: 'Typeof', romaji: 'typeof' },
-    { display: 'Instanceof', romaji: 'instanceof' }, { display: 'New', romaji: 'new' },
-    { display: 'Class', romaji: 'class' }, { display: 'Extends', romaji: 'extends' },
-    { display: 'Super', romaji: 'super' }, { display: 'This', romaji: 'this' },
-    { display: 'Constructor', romaji: 'constructor' }, { display: 'Static', romaji: 'static' },
-    { display: 'Get', romaji: 'get' }, { display: 'Set', romaji: 'set' },
-    { display: 'Try', romaji: 'try' }, { display: 'Catch', romaji: 'catch' },
-    { display: 'Finally', romaji: 'finally' }, { display: 'Throw', romaji: 'throw' },
-    { display: 'If', romaji: 'if' }, { display: 'Else', romaji: 'else' },
-    { display: 'Switch', romaji: 'switch' }, { display: 'Case', romaji: 'case' },
-    { display: 'Break', romaji: 'break' }, { display: 'Default', romaji: 'default' },
-    { display: 'For', romaji: 'for' }, { display: 'While', romaji: 'while' },
-    { display: 'Do', romaji: 'do' }, { display: 'Continue', romaji: 'continue' },
-    { display: 'Var', romaji: 'var' }, { display: 'Let', romaji: 'let' },
-    { display: 'True', romaji: 'true' }, { display: 'False', romaji: 'false' },
-    { display: 'Null', romaji: 'null' }, { display: 'Undefined', romaji: 'undefined' },
-    { display: 'NaN', romaji: 'nan' }, { display: 'Infinity', romaji: 'infinity' },
-    { display: 'Object', romaji: 'object' }, { display: 'Array', romaji: 'array' },
-    { display: 'String', romaji: 'string' }, { display: 'Number', romaji: 'number' },
-    { display: 'Boolean', romaji: 'boolean' }, { display: 'Symbol', romaji: 'symbol' },
-    { display: 'BigInt', romaji: 'bigint' }, { display: 'Date', romaji: 'date' },
-    { display: 'Math', romaji: 'math' }, { display: 'JSON', romaji: 'json' },
-    { display: 'RegExp', romaji: 'regexp' }, { display: 'Error', romaji: 'error' },
-    { display: 'Window', romaji: 'window' }, { display: 'Document', romaji: 'document' },
-    { display: 'Navigator', romaji: 'navigator' }, { display: 'Location', romaji: 'location' },
-    { display: 'History', romaji: 'history' }, { display: 'Screen', romaji: 'screen' },
-    { display: 'LocalStorage', romaji: 'localstorage' }, { display: 'SessionStorage', romaji: 'sessionstorage' },
-    { display: 'Cookie', romaji: 'cookie' }, { display: 'Fetch', romaji: 'fetch' },
-    { display: 'XHR', romaji: 'xhr' }, { display: 'AJAX', romaji: 'ajax' },
-    { display: 'DOM', romaji: 'dom' }, { display: 'API', romaji: 'api' },
-    { display: 'SDK', romaji: 'sdk' }, { display: 'URL', romaji: 'url' },
-    { display: 'URI', romaji: 'uri' }, { display: 'HTTP', romaji: 'http' },
-    { display: 'HTTPS', romaji: 'https' }, { display: 'HTML', romaji: 'html' },
-    { display: 'CSS', romaji: 'css' }, { display: 'JS', romaji: 'js' },
-    { display: 'XML', romaji: 'xml' }, { display: 'SVG', romaji: 'svg' },
-    { display: 'Canvas', romaji: 'canvas' }, { display: 'WebGL', romaji: 'webgl' },
-    { display: 'npm', romaji: 'npm' }, { display: 'yarn', romaji: 'yarn' },
-    { display: 'node', romaji: 'node' }, { display: 'git', romaji: 'git' },
-    { display: 'docker', romaji: 'docker' }, { display: 'aws', romaji: 'aws' },
-    { display: 'gcp', romaji: 'gcp' }, { display: 'azure', romaji: 'azure' },
-    { display: 'firebase', romaji: 'firebase' }, { display: 'vercel', romaji: 'vercel' },
-    { display: 'netlify', romaji: 'netlify' }, { display: 'heroku', romaji: 'heroku' },
-    { display: 'linux', romaji: 'linux' }, { display: 'mac', romaji: 'mac' },
-    { display: 'windows', romaji: 'windows' }, { display: 'android', romaji: 'android' },
-    { display: 'ios', romaji: 'ios' }, { display: 'chrome', romaji: 'chrome' },
-    { display: 'firefox', romaji: 'firefox' }, { display: 'safari', romaji: 'safari' },
-    { display: 'edge', romaji: 'edge' }, { display: 'opera', romaji: 'opera' },
-    { display: 'ie', romaji: 'ie' },
-    { display: '<div>', romaji: '<div>' }, { display: '</div>', romaji: '</div>' },
-    { display: '<br/>', romaji: '<br/>' }, { display: 'console.log()', romaji: 'console.log()' },
-    { display: '=>', romaji: '=>' }, { display: '{}', romaji: '{}' },
-    { display: '[]', romaji: '[]' }, { display: '()', romaji: '()' },
-    { display: '#id', romaji: '#id' }, { display: '.class', romaji: '.class' },
-    { display: '1+1=2', romaji: '1+1=2' }, { display: '100%', romaji: '100%' },
-    { display: '$100', romaji: '$100' }, { display: '@user', romaji: '@user' },
-    { display: 'http://', romaji: 'http://' }, { display: 'www.', romaji: 'www.' },
-    { display: '.com', romaji: '.com' }, { display: '.org', romaji: '.org' },
-    { display: '.net', romaji: '.net' }, { display: '.io', romaji: '.io' },
-  ]
+  EASY: DIFFICULTY_SETTINGS.EASY.zones[0].zako,
+  NORMAL: DIFFICULTY_SETTINGS.NORMAL.zones[0].zako,
+  HARD: DIFFICULTY_SETTINGS.HARD.zones[0].zako
+};
+
+// 宝箱の定義を追加
+export const TREASURE_CHESTS = {
+  NORMAL: { id: 'NORMAL', name: '普通の宝箱', color: 'bg-stone-500', ringColor: 'ring-stone-700', ranks: ['N', 'R'], chance: 0.7 },
+  SILVER: { id: 'SILVER', name: '銀色の宝箱', color: 'bg-slate-300', ringColor: 'ring-slate-400', ranks: ['R', 'SR'], chance: 0.2 },
+  GOLD: { id: 'GOLD', name: '金色の宝箱', color: 'bg-yellow-400', ringColor: 'ring-yellow-600', ranks: ['SR', 'UR'], chance: 0.07 },
+  RAINBOW: { id: 'RAINBOW', name: '虹色の宝箱', color: 'bg-[conic-gradient(at_top,_var(--tw-gradient-stops))] from-red-500 via-yellow-500 to-blue-500', ringColor: 'ring-white', ranks: ['UR', 'LR'], chance: 0.03 },
 };
 
 export const RARITY = {

@@ -1,4 +1,4 @@
-import { CONSUMABLES, ITEM_TYPES, RARITY, JOBS, RACES, PERSONALITIES, GROWTH, ARENA_RANKS, RACE_ADVANTAGES, JOB_ADVANTAGES } from '../constants/data';
+import { CONSUMABLES, ITEM_TYPES, RARITY, JOBS, RACES, PERSONALITIES, GROWTH, ARENA_RANKS, RACE_ADVANTAGES, JOB_ADVANTAGES, TREASURE_CHESTS } from '../constants/data';
 
 export const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -41,13 +41,22 @@ export const generateConsumable = () => {
     };
 };
 
-export const generateItem = (playerLevel, jobType = null) => {
-  // 30%の確率で消耗品を生成
-  if (Math.random() < 0.3) {
+// ★拡張: forceRarityKey, forceEquipment を追加
+export const generateItem = (playerLevel, jobType = null, forceRarityKey = null, forceEquipment = false) => {
+  // 30%の確率で消耗品を生成 (強制装備生成モードでない場合)
+  if (!forceEquipment && !forceRarityKey && Math.random() < 0.3) {
     return generateConsumable();
   }
 
-  const rarity = getRarity();
+  // レアリティの決定
+  let rarity;
+  if (forceRarityKey) {
+    // 宝箱などでレアリティ指定がある場合
+    rarity = RARITY[forceRarityKey]; 
+  } else {
+    rarity = getRarity();
+  }
+
   const types = Object.keys(ITEM_TYPES).filter(t => t !== 'CONSUMABLE');
   const typeKey = types[Math.floor(Math.random() * types.length)];
   const typeName = ITEM_TYPES[typeKey];
@@ -80,7 +89,6 @@ export const generateItem = (playerLevel, jobType = null) => {
         targetJob = JOBS[jobKeys[Math.floor(Math.random() * jobKeys.length)]].id;
      }
      
-     // IDではなくKey(大文字)で保存するよう修正推奨だが、既存ロジックに合わせて小文字IDを使用
      jobReq = [targetJob]; 
 
      if (targetJob === 'fighter') {
@@ -160,6 +168,28 @@ export const generateItem = (playerLevel, jobType = null) => {
     uniqueCode,
     locked: false 
   };
+};
+
+// ★宝箱リストを生成する関数
+export const getTreasureChests = () => {
+  const chests = [];
+  for(let i=0; i<3; i++) {
+    const r = Math.random();
+    let type = TREASURE_CHESTS.NORMAL;
+    if (r > 1 - TREASURE_CHESTS.RAINBOW.chance) type = TREASURE_CHESTS.RAINBOW;
+    else if (r > 1 - TREASURE_CHESTS.RAINBOW.chance - TREASURE_CHESTS.GOLD.chance) type = TREASURE_CHESTS.GOLD;
+    else if (r > 1 - TREASURE_CHESTS.RAINBOW.chance - TREASURE_CHESTS.GOLD.chance - TREASURE_CHESTS.SILVER.chance) type = TREASURE_CHESTS.SILVER;
+    
+    chests.push({ ...type, uniqueId: generateId() });
+  }
+  return chests;
+};
+
+// ★宝箱を開けてアイテムを生成する関数
+export const openTreasureChest = (chestType, playerLevel, jobType) => {
+  const ranks = chestType.ranks; // ['N', 'R'] etc.
+  const rankKey = ranks[Math.floor(Math.random() * ranks.length)]; // Randomly pick one
+  return generateItem(playerLevel, jobType, rankKey, true); // forceEquipment=true
 };
 
 export const calcInitialStats = (jobId, raceId, persId) => {
@@ -275,20 +305,17 @@ export const getArenaRank = (points) => {
   return ARENA_RANKS[0];
 };
 
-// ★安全な相性ダメージ倍率計算 (大文字小文字対応 & 詳細返却)
 export const calculateDamageMultiplier = (attacker, defender) => {
   let multiplier = 1.0;
-  let reasons = []; // 倍率増加の理由を記録
+  let reasons = []; 
 
   if (!attacker || !defender) return { multiplier, reasons };
 
-  // 安全にキーを取得 (大文字化)
   const atkRace = attacker.race ? attacker.race.toUpperCase() : '';
   const defRace = defender.race ? defender.race.toUpperCase() : '';
   const atkJob = attacker.job ? attacker.job.toUpperCase() : '';
   const defJob = defender.job ? defender.job.toUpperCase() : '';
 
-  // 種族相性チェック
   if (atkRace && defRace && RACE_ADVANTAGES[atkRace]) {
     if (RACE_ADVANTAGES[atkRace].includes(defRace)) {
       multiplier *= 1.2;
@@ -296,7 +323,6 @@ export const calculateDamageMultiplier = (attacker, defender) => {
     }
   }
 
-  // 職業相性チェック
   if (atkJob && defJob && JOB_ADVANTAGES[atkJob]) {
     if (JOB_ADVANTAGES[atkJob].includes(defJob)) {
       multiplier *= 1.2;
@@ -304,7 +330,6 @@ export const calculateDamageMultiplier = (attacker, defender) => {
     }
   }
 
-  // 小数点以下の誤差を綺麗にする (例: 1.43999 -> 1.44)
   multiplier = Math.round(multiplier * 100) / 100;
 
   return { multiplier, reasons };
