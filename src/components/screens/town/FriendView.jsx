@@ -1,47 +1,104 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, UserPlus, Send, MessageCircle, Gift, Check, X } from 'lucide-react';
-import { doc, getDoc, setDoc, onSnapshot, collection, query, where, updateDoc, arrayUnion, arrayRemove, addDoc, serverTimestamp } from 'firebase/firestore';
+import { Users, Search, UserPlus, Send, MessageCircle, Gift, Check, X, UserMinus, Ban, Unlock } from 'lucide-react'; // アイコン追加
+import { doc, getDoc, setDoc, onSnapshot, collection, query, where, updateDoc, arrayUnion, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db, GAME_APP_ID } from '../../../lib/firebase';
 import { ItemIcon } from './ItemIcon';
 import { RARITY } from '../../../constants/data';
 
 const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
-  const [tab, setTab] = useState('LIST'); // LIST, SEARCH, REQUESTS
+  const [tab, setTab] = useState('LIST'); // LIST, SEARCH, REQUESTS, BLOCK
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [blacklist, setBlacklist] = useState([]); // ブロックリスト
   
-  // 検索用
   const [searchId, setSearchId] = useState('');
   const [searchResult, setSearchResult] = useState(null);
   const [searchMsg, setSearchMsg] = useState('');
 
-  // プレゼント用
-  const [giftTarget, setGiftTarget] = useState(null); // フレンドオブジェクト
-  const [giftItem, setGiftItem] = useState(null); // 選択したアイテム
+  const [giftTarget, setGiftTarget] = useState(null);
+  const [giftItem, setGiftItem] = useState(null);
 
-  // データ読み込み
   useEffect(() => {
-    // フレンドリストの監視 (users/{myId}/friends)
+    // フレンドリスト監視
     const qFriends = collection(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friends');
     const unsubFriends = onSnapshot(qFriends, (snapshot) => {
-      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setFriends(list);
+      setFriends(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    // フレンド申請の監視 (users/{myId}/friendRequests)
+    // フレンド申請監視
     const qRequests = collection(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friendRequests');
     const unsubRequests = onSnapshot(qRequests, (snapshot) => {
-      const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setRequests(list);
+      setRequests(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // ★追加: ブロックリスト監視
+    const qBlacklist = collection(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'blacklist');
+    const unsubBlacklist = onSnapshot(qBlacklist, (snapshot) => {
+      setBlacklist(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     return () => {
       unsubFriends();
       unsubRequests();
+      unsubBlacklist();
     };
   }, [player.id]);
 
-  // ユーザー検索
+  // ★追加: フレンド削除
+  const handleRemoveFriend = async (friend) => {
+    if (!window.confirm(`${friend.name} さんをフレンドから削除しますか？`)) return;
+    try {
+      // 自分のリストから削除
+      await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friends', friend.id));
+      // 相手のリストから自分を削除（相互削除）
+      await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', friend.id, 'friends', player.id));
+      alert('フレンドを削除しました');
+    } catch (e) {
+      console.error(e);
+      alert('削除に失敗しました: ' + e.message);
+    }
+  };
+
+  // ★追加: ブロック
+  const handleBlockUser = async (target) => {
+    if (!window.confirm(`${target.name} さんをブロックしますか？\n(フレンド解除され、今後申請も届かなくなります)`)) return;
+    try {
+      // ブロックリストに追加
+      await setDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'blacklist', target.id), {
+        name: target.name,
+        id: target.id,
+        createdAt: serverTimestamp()
+      });
+
+      // フレンドだった場合は削除 (両方向)
+      if (friends.some(f => f.id === target.id)) {
+        await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friends', target.id));
+        await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', target.id, 'friends', player.id));
+      }
+      
+      // 申請が来ていたら削除
+      await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friendRequests', target.id));
+
+      alert('ブロックしました');
+      setSearchResult(null); // 検索結果からもクリア
+    } catch (e) {
+      console.error(e);
+      alert('ブロックに失敗しました: ' + e.message);
+    }
+  };
+
+  // ★追加: ブロック解除
+  const handleUnblock = async (targetId) => {
+    if (!window.confirm('ブロックを解除しますか？')) return;
+    try {
+      await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'blacklist', targetId));
+      alert('ブロックを解除しました');
+    } catch (e) {
+      console.error(e);
+      alert('解除に失敗しました');
+    }
+  };
+
   const handleSearch = async () => {
     setSearchResult(null);
     setSearchMsg('');
@@ -52,7 +109,6 @@ const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
     }
 
     try {
-      // ユーザーデータの存在確認 (saveData/current を参照)
       const docRef = doc(db, 'artifacts', GAME_APP_ID, 'users', searchId, 'saveData', 'current');
       const snap = await getDoc(docRef);
       if (snap.exists()) {
@@ -66,11 +122,9 @@ const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
     }
   };
 
-  // 申請送信
   const handleSendRequest = async () => {
     if (!searchResult) return;
     try {
-      // 相手の friendRequests に自分の情報を書き込む
       const ref = doc(db, 'artifacts', GAME_APP_ID, 'users', searchResult.id, 'friendRequests', player.id);
       await setDoc(ref, {
         name: player.name,
@@ -86,60 +140,51 @@ const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
     }
   };
 
-  // 申請承認
   const handleAccept = async (req) => {
     try {
-      // 自分の friends に追加
       await setDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friends', req.id), {
         name: req.name,
         level: req.level,
         id: req.id,
         createdAt: serverTimestamp()
       });
-      // 相手の friends に自分を追加
       await setDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', req.id, 'friends', player.id), {
         name: player.name,
         level: player.level,
         id: player.id,
         createdAt: serverTimestamp()
       });
-      // 申請を削除
-      await deleteRequest(req.id);
+      await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friendRequests', req.id));
       alert(`${req.name} さんとフレンドになりました！`);
+    } catch (e) {
+      console.error(e);
+      alert('承認エラー: ' + e.message);
+    }
+  };
+
+  const handleDeleteRequest = async (targetId) => {
+    try {
+      await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friendRequests', targetId));
     } catch (e) {
       console.error(e);
     }
   };
 
-  // 申請拒否/削除
-  const deleteRequest = async (targetId) => {
-    await setDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friendRequests', targetId), {}, { merge: false }); // 削除の代わりに空にするか、deleteDocを使うべきだが、簡単のため上書き削除的な処理（実際は deleteDoc が必要）
-    // deleteDoc を使うため import が必要ですが、ここでは省略して setDoc で無効化する擬似処理とします
-    // 正しくは: await deleteDoc(doc(db, ...));
-    const { deleteDoc } = await import('firebase/firestore'); // ダイナミックインポートまたは上のimportに追加
-    await deleteDoc(doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friendRequests', targetId));
-  };
-
-  // プレゼント送信処理
   const handleSendGift = async () => {
     if (!giftTarget || !giftItem) return;
     if (!window.confirm(`${giftTarget.name} さんに\n${giftItem.name} をプレゼントしますか？\n(自分の持ち物からなくなります)`)) return;
 
     try {
-      // 自分のインベントリから削除
       setInventory(prev => prev.filter(i => i.id !== giftItem.id));
 
-      // 相手の inventory に直接追加 (簡易実装)
-      // 本来は相手の「プレゼントボックス」コレクションに送るのが安全ですが、
-      // ここでは仕様通り「プレゼントする」を実現するため、相手のセーブデータを更新します。
-      // ※ トランザクション推奨ですが、簡易的に実装します。
-      
-      const targetRef = doc(db, 'artifacts', GAME_APP_ID, 'users', giftTarget.id, 'saveData', 'current');
-      await updateDoc(targetRef, {
-        inventory: arrayUnion(giftItem)
+      const giftRef = collection(db, 'artifacts', GAME_APP_ID, 'users', giftTarget.id, 'gifts');
+      await addDoc(giftRef, {
+        senderId: player.id,
+        senderName: player.name,
+        item: giftItem,
+        createdAt: serverTimestamp()
       });
 
-      // メールで通知を送る
       await addDoc(collection(db, 'artifacts', GAME_APP_ID, 'chats'), {
         participants: [player.id, giftTarget.id].sort(),
         senderId: player.id,
@@ -156,7 +201,11 @@ const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
     }
   };
 
-  // プレゼント選択モーダル
+  // ブロック中のユーザーIDリスト
+  const blockedIds = blacklist.map(b => b.id);
+  // 表示用リクエストリスト (ブロック済みユーザーを除外)
+  const visibleRequests = requests.filter(req => !blockedIds.includes(req.id));
+
   if (giftTarget) {
     return (
       <div className="absolute inset-0 z-50 bg-white p-4 flex flex-col animate-fade-in">
@@ -184,10 +233,15 @@ const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
 
   return (
     <div className="h-full flex flex-col bg-white/90 backdrop-blur-md animate-fade-in">
-      <div className="p-4 border-b border-slate-200 flex gap-2">
-        <button onClick={() => setTab('LIST')} className={`flex-1 py-1 rounded text-xs font-bold ${tab === 'LIST' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>フレンド</button>
-        <button onClick={() => setTab('SEARCH')} className={`flex-1 py-1 rounded text-xs font-bold ${tab === 'SEARCH' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>検索・追加</button>
-        <button onClick={() => setTab('REQUESTS')} className={`flex-1 py-1 rounded text-xs font-bold ${tab === 'REQUESTS' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>申請 {requests.length > 0 && `(${requests.length})`}</button>
+      <div className="p-4 border-b border-slate-200 flex gap-2 overflow-x-auto no-scrollbar">
+        <button onClick={() => setTab('LIST')} className={`flex-shrink-0 px-3 py-1 rounded text-xs font-bold ${tab === 'LIST' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>フレンド</button>
+        <button onClick={() => setTab('SEARCH')} className={`flex-shrink-0 px-3 py-1 rounded text-xs font-bold ${tab === 'SEARCH' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>検索・追加</button>
+        <button onClick={() => setTab('REQUESTS')} className={`flex-shrink-0 px-3 py-1 rounded text-xs font-bold ${tab === 'REQUESTS' ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+          申請 {visibleRequests.length > 0 && `(${visibleRequests.length})`}
+        </button>
+        <button onClick={() => setTab('BLOCK')} className={`flex-shrink-0 px-3 py-1 rounded text-xs font-bold ${tab === 'BLOCK' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+          ブロック中
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -195,11 +249,20 @@ const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
           <div className="space-y-2">
             {friends.length === 0 && <div className="text-center text-slate-400 py-10">フレンドがいません。<br/>検索して追加しましょう！</div>}
             {friends.map(f => (
-              <div key={f.id} className="bg-white p-3 rounded border border-slate-200 shadow-sm flex flex-col gap-2">
-                <div className="flex justify-between items-center">
+              <div key={f.id} className="bg-white p-3 rounded border border-slate-200 shadow-sm relative group">
+                <div className="flex justify-between items-start mb-2">
                   <div>
                     <div className="font-bold text-slate-700">{f.name}</div>
                     <div className="text-xs text-slate-400">Lv.{f.level}</div>
+                  </div>
+                  {/* 管理メニュー（ホバーまたは常時表示） */}
+                  <div className="flex gap-1">
+                    <button onClick={() => handleRemoveFriend(f)} className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded" title="フレンド削除">
+                      <UserMinus size={16}/>
+                    </button>
+                    <button onClick={() => handleBlockUser(f)} className="p-1 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded" title="ブロック">
+                      <Ban size={16}/>
+                    </button>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-1">
@@ -234,9 +297,21 @@ const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
               <div className="bg-white p-4 rounded border border-teal-200 shadow-sm">
                 <div className="font-bold text-lg mb-1">{searchResult.name}</div>
                 <div className="text-sm text-slate-500 mb-4">Lv.{searchResult.level}</div>
-                <button onClick={handleSendRequest} className="w-full bg-teal-600 text-white py-2 rounded font-bold hover:bg-teal-500 flex items-center justify-center gap-2">
-                  <UserPlus size={18}/> フレンド申請を送る
-                </button>
+                
+                {blockedIds.includes(searchResult.id) ? (
+                  <div className="text-red-500 text-sm font-bold text-center border border-red-200 bg-red-50 py-2 rounded">
+                    ブロック中のユーザーです
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={handleSendRequest} className="flex-1 bg-teal-600 text-white py-2 rounded font-bold hover:bg-teal-500 flex items-center justify-center gap-2">
+                      <UserPlus size={18}/> 申請する
+                    </button>
+                    <button onClick={() => handleBlockUser(searchResult)} className="px-3 bg-slate-200 text-slate-500 rounded hover:bg-red-100 hover:text-red-500" title="ブロック">
+                      <Ban size={18}/>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -244,8 +319,8 @@ const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
 
         {tab === 'REQUESTS' && (
           <div className="space-y-2">
-            {requests.length === 0 && <div className="text-center text-slate-400 py-10">届いている申請はありません</div>}
-            {requests.map(req => (
+            {visibleRequests.length === 0 && <div className="text-center text-slate-400 py-10">届いている申請はありません</div>}
+            {visibleRequests.map(req => (
               <div key={req.id} className="bg-white p-3 rounded border border-orange-200 shadow-sm flex justify-between items-center">
                 <div>
                   <div className="font-bold text-slate-700">{req.name}</div>
@@ -253,8 +328,26 @@ const FriendView = ({ player, inventory, setInventory, onStartChat }) => {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleAccept(req)} className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600"><Check size={16}/></button>
-                  <button onClick={() => deleteRequest(req.id)} className="bg-slate-200 text-slate-500 p-2 rounded hover:bg-slate-300"><X size={16}/></button>
+                  <button onClick={() => handleDeleteRequest(req.id)} className="bg-slate-200 text-slate-500 p-2 rounded hover:bg-slate-300"><X size={16}/></button>
+                  <button onClick={() => handleBlockUser(req)} className="bg-slate-100 text-slate-400 p-2 rounded hover:bg-red-100 hover:text-red-500" title="ブロック"><Ban size={16}/></button>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'BLOCK' && (
+          <div className="space-y-2">
+            {blacklist.length === 0 && <div className="text-center text-slate-400 py-10">ブロック中のユーザーはいません</div>}
+            {blacklist.map(user => (
+              <div key={user.id} className="bg-slate-50 p-3 rounded border border-slate-200 flex justify-between items-center opacity-75">
+                <div>
+                  <div className="font-bold text-slate-600">{user.name}</div>
+                  <div className="text-[10px] text-slate-400 font-mono">{user.id}</div>
+                </div>
+                <button onClick={() => handleUnblock(user.id)} className="bg-slate-200 text-slate-600 px-3 py-1.5 rounded text-xs font-bold hover:bg-slate-300 flex items-center gap-1">
+                  <Unlock size={14}/> 解除
+                </button>
               </div>
             ))}
           </div>

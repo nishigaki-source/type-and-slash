@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { Settings, Copy, Check, Edit2, Save, X, Loader2 } from 'lucide-react'; // アイコン追加
+import { Settings, Copy, Check, Edit2, Save, X, Loader2, Gamepad2 } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db, GAME_APP_ID } from '../../../lib/firebase';
 
-const SettingsView = ({ player, setPlayer }) => {
+const SettingsView = ({ player, setPlayer, difficulty, setDifficulty }) => {
   const [copied, setCopied] = useState(false);
-  
-  // 名前変更用のState
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(player.name);
   const [isSaving, setIsSaving] = useState(false);
@@ -43,13 +41,10 @@ const SettingsView = ({ player, setPlayer }) => {
 
     setIsSaving(true);
     try {
-      // Firestoreの更新
       const userRef = doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'saveData', 'current');
       await updateDoc(userRef, {
         "player.name": newName
       });
-
-      // ローカルStateの更新
       setPlayer(prev => ({ ...prev, name: newName }));
       setIsEditingName(false);
     } catch (e) {
@@ -60,13 +55,19 @@ const SettingsView = ({ player, setPlayer }) => {
     }
   };
 
+  // 難易度変更ハンドラ (変更時に即保存はせず、GameコンポーネントのuseEffectでまとめて保存される)
+  const handleDifficultyChange = (newDiff) => {
+    setDifficulty(newDiff);
+  };
+
   return (
     <div className="h-full flex flex-col bg-white/90 backdrop-blur-md animate-fade-in p-6">
       <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800 border-b pb-4 mb-6">
         <Settings /> 設定・プロフィール
       </h2>
 
-      <div className="space-y-6">
+      <div className="space-y-6 overflow-y-auto">
+        
         {/* プロフィールカード */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold text-slate-500 mb-4">アカウント情報</h3>
@@ -85,29 +86,17 @@ const SettingsView = ({ player, setPlayer }) => {
                     maxLength={10}
                     autoFocus
                   />
-                  <button 
-                    onClick={saveName} 
-                    disabled={isSaving}
-                    className="bg-blue-600 text-white p-2 rounded hover:bg-blue-500 disabled:bg-slate-300 transition-colors"
-                  >
+                  <button onClick={saveName} disabled={isSaving} className="bg-blue-600 text-white p-2 rounded hover:bg-blue-500 disabled:bg-slate-300 transition-colors">
                     {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                   </button>
-                  <button 
-                    onClick={cancelEditing}
-                    disabled={isSaving}
-                    className="bg-slate-200 text-slate-500 p-2 rounded hover:bg-slate-300 disabled:opacity-50 transition-colors"
-                  >
+                  <button onClick={cancelEditing} disabled={isSaving} className="bg-slate-200 text-slate-500 p-2 rounded hover:bg-slate-300 disabled:opacity-50 transition-colors">
                     <X size={20} />
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 group">
                   <div className="text-lg font-bold text-slate-800">{player.name}</div>
-                  <button 
-                    onClick={startEditing}
-                    className="text-slate-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-colors"
-                    title="名前を変更"
-                  >
+                  <button onClick={startEditing} className="text-slate-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-colors" title="名前を変更">
                     <Edit2 size={16} />
                   </button>
                 </div>
@@ -120,18 +109,45 @@ const SettingsView = ({ player, setPlayer }) => {
                 <div className="bg-slate-100 px-4 py-2 rounded border border-slate-200 font-mono text-slate-600 flex-1 break-all">
                   {player.id}
                 </div>
-                <button 
-                  onClick={handleCopyId}
-                  className={`p-2 rounded border transition-colors ${copied ? 'bg-green-100 text-green-600 border-green-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
-                  title="IDをコピー"
-                >
+                <button onClick={handleCopyId} className={`p-2 rounded border transition-colors ${copied ? 'bg-green-100 text-green-600 border-green-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`} title="IDをコピー">
                   {copied ? <Check size={20} /> : <Copy size={20} />}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">
-                ※このIDを友達に教えると、フレンド申請を送ってもらえます。
-              </p>
             </div>
+          </div>
+        </div>
+
+        {/* ゲーム設定 (難易度) */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
+            <Gamepad2 size={16} /> ゲーム設定
+          </h3>
+          
+          <div>
+            <div className="text-xs text-slate-400 mb-2">難易度 (出題モード)</div>
+            <div className="flex gap-2">
+              {[
+                { key: 'EASY', label: 'かんたん', desc: 'ひらがな中心' },
+                { key: 'NORMAL', label: 'ふつう', desc: '漢字・一般' },
+                { key: 'HARD', label: 'むずかしい', desc: '英語・記号' }
+              ].map(mode => (
+                <button
+                  key={mode.key}
+                  onClick={() => handleDifficultyChange(mode.key)}
+                  className={`flex-1 py-3 px-2 rounded-lg border transition-all ${
+                    difficulty === mode.key 
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-md' 
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="font-bold text-sm">{mode.label}</div>
+                  <div className={`text-[10px] ${difficulty === mode.key ? 'text-blue-200' : 'text-slate-400'}`}>{mode.desc}</div>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">
+              ※難易度を変更すると、出現する敵の強さや出題ワードの傾向が変化します。
+            </p>
           </div>
         </div>
 

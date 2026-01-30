@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mail, Send, ArrowLeft, User } from 'lucide-react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, or } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore'; // updateDoc, doc 追加
 import { db, GAME_APP_ID } from '../../../lib/firebase';
 
 const MailView = ({ player, initialTarget, onClose }) => {
@@ -10,7 +10,7 @@ const MailView = ({ player, initialTarget, onClose }) => {
   const [inputText, setInputText] = useState('');
   const scrollRef = useRef(null);
 
-  // フレンドリスト取得 (チャット相手選択用)
+  // フレンドリスト取得
   useEffect(() => {
     const q = collection(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friends');
     const unsub = onSnapshot(q, (snap) => {
@@ -19,18 +19,11 @@ const MailView = ({ player, initialTarget, onClose }) => {
     return () => unsub();
   }, [player.id]);
 
-  // メッセージ監視
+  // メッセージ監視 & 既読処理
   useEffect(() => {
     if (!targetFriend) return;
 
-    // チャットIDは2人のIDをソートして結合したものとする (例: "userA_userB")
-    // これによりどちらから見ても同じルームを参照できる
     const participants = [player.id, targetFriend.id].sort();
-    
-    // 簡易的に全チャットからフィルタリング（本来はサブルーム構造が良いが、クエリで実現）
-    // Firestoreの複合インデックスが必要になる可能性があるため、
-    // ここでは単純化のため「chats」コレクションにフラットに保存し、クライアント側で選別するか、
-    // participants配列を含むドキュメントを検索する方式をとります。
     
     const q = query(
       collection(db, 'artifacts', GAME_APP_ID, 'chats'),
@@ -39,8 +32,21 @@ const MailView = ({ player, initialTarget, onClose }) => {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      // 自動スクロール
+      const msgs = [];
+      snap.docs.forEach(d => {
+        const data = d.data();
+        const msg = { id: d.id, ...data };
+        msgs.push(msg);
+
+        // ★追加: 相手からのメッセージで、かつ未読の場合は既読にする
+        if (data.senderId !== player.id && data.read === false) {
+          updateDoc(doc(db, 'artifacts', GAME_APP_ID, 'chats', d.id), {
+            read: true
+          }).catch(e => console.error("Read update error:", e));
+        }
+      });
+      setMessages(msgs);
+
       setTimeout(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       }, 100);
@@ -59,6 +65,7 @@ const MailView = ({ player, initialTarget, onClose }) => {
         participants,
         senderId: player.id,
         text: inputText,
+        read: false, // ★追加: 未読状態で作成
         createdAt: serverTimestamp()
       });
       setInputText('');
@@ -103,8 +110,9 @@ const MailView = ({ player, initialTarget, onClose }) => {
           const isMe = msg.senderId === player.id;
           return (
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[70%] p-3 rounded-xl text-sm ${isMe ? 'bg-blue-500 text-white rounded-tr-none' : 'bg-white border border-slate-200 rounded-tl-none'}`}>
+              <div className={`max-w-[70%] p-3 rounded-xl text-sm shadow-sm ${isMe ? 'bg-blue-500 text-white rounded-tr-none' : 'bg-white border border-slate-200 rounded-tl-none'}`}>
                 {msg.text}
+                {isMe && <div className={`text-[9px] text-right mt-1 ${msg.read ? 'text-blue-200' : 'text-blue-300'}`}>{msg.read ? '既読' : '未読'}</div>}
               </div>
             </div>
           );

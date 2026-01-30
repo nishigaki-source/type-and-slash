@@ -398,15 +398,17 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
           const w = enemy.word.display;
           missedWords.current[w] = (missedWords.current[w] || 0) + 1;
 
-          // 苦手キー記録
-          const k = expectedChar.toUpperCase();
-          missedKeys.current[k] = (missedKeys.current[k] || 0) + 1;
+          // 苦手キー記録 (undefinedチェックを追加)
+          if (expectedChar) {
+            const k = expectedChar.toUpperCase();
+            missedKeys.current[k] = (missedKeys.current[k] || 0) + 1;
+          }
 
           playSound('MISS'); 
           applyPenalty();
        }
     } else {
-      if (val === targetRomaji.substring(0, val.length)) {
+      if (val === enemy.word.romaji.substring(0, val.length)) {
           setTyped(val);
       }
     }
@@ -490,23 +492,26 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
             <span className="bg-blue-600 text-white w-8 h-8 rounded flex items-center justify-center text-sm shadow-sm">{battleState.stage}</span>
             STAGE {battleState.stage}
           </div>
-          <div className="flex items-center gap-4">
-             {battleState.statusAilments.poison && <div className="bg-purple-100 px-3 py-1 rounded text-purple-700 animate-pulse font-bold flex items-center gap-1 border border-purple-200"><Skull size={14}/> 毒</div>}
-             {Object.entries(battleState.buffs).map(([key, val]) => val > 0 && (
-                <div key={key} className="bg-orange-100 px-3 py-1 rounded text-orange-700 font-bold flex items-center gap-1 border border-orange-200"><ArrowRight size={14} className="-rotate-45"/> {key.toUpperCase()} UP</div>
-             ))}
-             
-             <button 
-               onClick={(e) => {
-                 e.stopPropagation();
-                 if (window.confirm('戦闘を放棄して町へ戻りますか？\n(ペナルティはありません)')) {
-                   onRetreat();
-                 }
-               }}
-               className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded shadow-md font-bold text-xs flex items-center gap-1 transition-colors"
-             >
-               <LogOut size={14} /> 帰還
-             </button>
+          <div className="flex items-center gap-2 flex-col items-end">
+             <div className="text-xs text-blue-600 font-bold tracking-widest uppercase mb-1 bg-white/70 px-2 py-0.5 rounded border border-blue-100">{battleState.zoneName}</div>
+             <div className="flex items-center gap-4">
+               {battleState.statusAilments.poison && <div className="bg-purple-100 px-3 py-1 rounded text-purple-700 animate-pulse font-bold flex items-center gap-1 border border-purple-200"><Skull size={14}/> 毒</div>}
+               {Object.entries(battleState.buffs).map(([key, val]) => val > 0 && (
+                  <div key={key} className="bg-orange-100 px-3 py-1 rounded text-orange-700 font-bold flex items-center gap-1 border border-orange-200"><ArrowRight size={14} className="-rotate-45"/> {key.toUpperCase()} UP</div>
+               ))}
+               
+               <button 
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   if (window.confirm('戦闘を放棄して町へ戻りますか？\n(ペナルティはありません)')) {
+                     onRetreat();
+                   }
+                 }}
+                 className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded shadow-md font-bold text-xs flex items-center gap-1 transition-colors"
+               >
+                 <LogOut size={14} /> 帰還
+               </button>
+             </div>
           </div>
       </div>
 

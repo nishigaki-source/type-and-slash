@@ -1,18 +1,18 @@
 import React from 'react';
 import { 
-  ShoppingBag, Trophy, Users, // FileText(クエスト)を削除しUsers(フレンド)を追加
+  ShoppingBag, Trophy, Users, 
   User, LogOut, Sword, Backpack, 
   ArrowLeftRight, Coins, Swords, Lock,
-  Gift, Mail, Megaphone, Settings
+  Gift, Mail, Megaphone, Settings, FileText // ★FileTextを追加
 } from 'lucide-react';
 import { JOBS } from '../../../constants/data';
 
 // MenuButtonコンポーネント
-const MenuButton = ({ icon, label, onClick, active = false, color = "bg-slate-800 hover:bg-slate-700", disabled = false }) => (
+const MenuButton = ({ icon, label, onClick, active = false, color = "bg-slate-800 hover:bg-slate-700", disabled = false, badge = 0 }) => (
   <button 
     onClick={disabled ? null : onClick}
     className={`
-      aspect-square flex flex-col items-center justify-center gap-1 rounded-lg border transition-all duration-200
+      aspect-square flex flex-col items-center justify-center gap-1 rounded-lg border transition-all duration-200 relative
       ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]' : 
         disabled ? 'bg-slate-800/50 border-slate-700/50 text-slate-600 cursor-not-allowed' : 
         `${color} border-slate-700 text-slate-300`}
@@ -23,14 +23,25 @@ const MenuButton = ({ icon, label, onClick, active = false, color = "bg-slate-80
       {disabled ? <Lock size={20} className="opacity-50"/> : React.cloneElement(icon, { size: 20 })}
     </div>
     <span className={`text-[10px] font-bold ${disabled ? 'text-slate-600' : ''}`}>{label}</span>
+    
+    {/* 通知バッジ */}
+    {badge > 0 && (
+      <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-900 shadow-md animate-bounce">
+        {badge > 9 ? '9+' : badge}
+      </div>
+    )}
   </button>
 );
 
-const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, isGuest }) => {
+const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, isGuest, badgeCounts }) => {
   const JobIll = JOBS[player.job].Illustration;
   const expPercent = player.level > 0 ? Math.min(100, Math.floor((player.exp / (player.level * 100)) * 100)) : 0;
 
   const diffLabel = difficulty === 'EASY' ? 'かんたん' : difficulty === 'NORMAL' ? 'ふつう' : 'むずかしい';
+  
+  // バッジ数の取得 (未定義の場合は0)
+  const friendBadge = badgeCounts?.friend || 0;
+  const mailBadge = badgeCounts?.mail || 0;
 
   return (
     <div className="w-[320px] bg-slate-900 border-l border-slate-700 flex flex-col text-white shadow-2xl z-10">
@@ -90,8 +101,9 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, 
             {/* 2行目 */}
             <MenuButton icon={<ShoppingBag />} label="ショップ" onClick={() => setActiveView('SHOP')} active={activeView === 'SHOP'} />
             <MenuButton icon={<Backpack />} label="アイテム" onClick={() => setActiveView('ITEM')} active={activeView === 'ITEM'} />
-            
-            {/* ★修正: クエスト(FileText)をフレンド(Users)に変更 */}
+            <MenuButton icon={<FileText />} label="クエスト" onClick={() => setActiveView('QUEST')} active={activeView === 'QUEST'} />
+
+            {/* 3行目 */}
             <MenuButton 
               icon={<Users />} 
               label="フレンド" 
@@ -99,9 +111,8 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, 
               active={activeView === 'FRIEND'} 
               color="bg-teal-900/40 hover:bg-teal-900/60 border-teal-900"
               disabled={isGuest}
+              badge={friendBadge}
             />
-
-            {/* 3行目 */}
             <MenuButton 
               icon={<ArrowLeftRight />} 
               label="トレード" 
@@ -111,17 +122,17 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, 
               disabled={isGuest}
             />
             <MenuButton icon={<User />} label="キャラクタ" onClick={() => setActiveView('STATUS')} active={activeView === 'STATUS'} />
-            <MenuButton icon={<Trophy />} label="実績" onClick={() => setActiveView('ACHIEVEMENT')} active={activeView === 'ACHIEVEMENT'} />
 
             {/* 4行目 */}
+            <MenuButton icon={<Trophy />} label="実績" onClick={() => setActiveView('ACHIEVEMENT')} active={activeView === 'ACHIEVEMENT'} />
             <MenuButton 
               icon={<Mail />} 
               label="メール" 
               onClick={() => setActiveView('MAIL')} 
               active={activeView === 'MAIL'} 
               disabled={isGuest}
+              badge={mailBadge}
             />
-            <MenuButton icon={<Megaphone />} label="お知らせ" onClick={() => setActiveView('INFO')} active={activeView === 'INFO'} />
             <MenuButton icon={<Settings />} label="設定" onClick={() => setActiveView('SETTINGS')} active={activeView === 'SETTINGS'} />
 
          </div>

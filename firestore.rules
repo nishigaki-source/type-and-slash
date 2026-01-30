@@ -2,14 +2,68 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // ユーザーのセーブデータ: 本人のみ読み書き可能
-    match /artifacts/{appId}/users/{userId}/saveData/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // ログインしているか確認する関数
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    // 本人かどうか確認する関数
+    function isUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ■ ユーザーデータ周り
+    match /artifacts/{appId}/users/{userId} {
+      
+      // セーブデータ (saveData/current)
+      match /saveData/{document=**} {
+        // 書き込み: 本人のみ
+        allow write: if isUser(userId);
+        // 読み込み: ログインユーザー全員 (フレンド検索で他人の名前やレベルを参照するため)
+        allow read: if isSignedIn();
+      }
+
+      // フレンドリスト
+      match /friends/{friendId} {
+        // 読み書き: 本人のみ、または相手のリストに自分を追加する場合
+        allow read, write: if isUser(userId) || request.auth.uid == friendId;
+      }
+
+      // フレンド申請
+      match /friendRequests/{requestId} {
+        // 読み込み・削除(承認/拒否): 本人のみ
+        allow read, delete: if isUser(userId);
+        // 書き込み(申請送信): ログインユーザー全員
+        allow create, update: if isSignedIn();
+      }
+
+      // ★プレゼントボックス
+      match /gifts/{giftId} {
+        // 作成(送信): ログインユーザー全員
+        allow create: if isSignedIn();
+        // 読み込み・削除(受取): 本人のみ
+        allow read, delete: if isUser(userId);
+      }
+
+      // ★追加: ブロックリスト (ブラックリスト)
+      match /blacklist/{targetId} {
+        // 読み書き: 本人のみ
+        allow read, write: if isUser(userId);
+      }
     }
     
-    // マルチプレイ用のルーム情報: ログインしていれば誰でも読み書き可能
+    // ■ マルチプレイ用ルーム
     match /artifacts/{appId}/rooms/{roomId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
+    }
+
+    // ■ トレード機能
+    match /artifacts/{appId}/trades/{tradeId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ■ チャット機能
+    match /artifacts/{appId}/chats/{chatId} {
+      allow read, write: if isSignedIn();
     }
     
   }

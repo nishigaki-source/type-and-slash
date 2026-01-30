@@ -14,9 +14,8 @@ import {
   calculateScore,
   calculateCPM,
   getTodayString,
-  generateRandomName,
-  getTreasureChests, // 追加
-  openTreasureChest // 追加
+  getTreasureChests,
+  openTreasureChest
 } from './utils/gameLogic';
 
 import AuthScreen from './components/screens/AuthScreen';
@@ -26,7 +25,7 @@ import TownScreen from './components/screens/TownScreen';
 import ClassChangeScreen from './components/screens/ClassChangeScreen';
 import BattleScreen from './components/screens/BattleScreen';
 import ResultModal from './components/ui/ResultModal';
-import TreasureSelectionModal from './components/ui/TreasureSelectionModal'; // 追加
+import TreasureSelectionModal from './components/ui/TreasureSelectionModal';
 import LobbyScreen from './components/screens/LobbyScreen';
 import MultiplayerBattleScreen from './components/screens/MultiplayerBattleScreen';
 
@@ -38,7 +37,7 @@ export default function TypingGame() {
   const [equipped, setEquipped] = useState({ HEAD: null, BODY: null, FEET: null, ACCESSORY: null, WEAPON: null });
   const [modalMessage, setModalMessage] = useState(null);
   const [shopItems, setShopItems] = useState([]);
-  const [difficulty, setDifficulty] = useState('EASY');
+  const [difficulty, setDifficulty] = useState('EASY'); // デフォルト難易度
   
   const [fbUser, setFbUser] = useState(null);
   const [isGuest, setIsGuest] = useState(false);
@@ -87,6 +86,10 @@ export default function TypingGame() {
             if (data.shopItems && data.shopItems.length > 0) {
                 setShopItems(data.shopItems);
             }
+            // ★保存されていた難易度を復元 (なければEASY)
+            if (data.difficulty) {
+              setDifficulty(data.difficulty);
+            }
             setGameState('TITLE'); 
           } else {
              setGameState('CHAR_CREATE');
@@ -106,7 +109,8 @@ export default function TypingGame() {
     if (player && fbUser && !isGuest) {
       const saveData = async () => {
         try {
-          const data = { player, inventory, equipped, shopItems };
+          // ★difficulty も保存データに含める
+          const data = { player, inventory, equipped, shopItems, difficulty };
           const docRef = doc(db, 'artifacts', GAME_APP_ID, 'users', fbUser.uid, 'saveData', 'current');
           await setDoc(docRef, data);
         } catch (e) {
@@ -115,7 +119,7 @@ export default function TypingGame() {
       };
       saveData();
     }
-  }, [player, inventory, equipped, shopItems, fbUser, isGuest]);
+  }, [player, inventory, equipped, shopItems, difficulty, fbUser, isGuest]);
 
   const refreshShop = useCallback(() => {
      if(!player) return;
@@ -146,6 +150,8 @@ export default function TypingGame() {
     initialWeapon.type = 'WEAPON';
     initialWeapon.name = '初心者の' + (JOBS[formData.job].weapon);
     initialWeapon.jobReq = [formData.job];
+    // ★画像ファイル名を設定
+    initialWeapon.imageId = 'beginner_sword.png'; 
     
     const initialPotions = [
       generateConsumable(), generateConsumable(), generateConsumable()
@@ -229,18 +235,34 @@ export default function TypingGame() {
     const difficultyData = DIFFICULTY_SETTINGS[difficulty];
     
     // 現在の階層がどのゾーンに該当するか検索
-    // 該当なし（上限突破時など）は最後のゾーンを使用
     const currentZone = difficultyData.zones.find(z => stage >= z.range[0] && stage <= z.range[1]) 
                         || difficultyData.zones[difficultyData.zones.length - 1];
+
+    // ★ゾーン内での進捗率 (0.0 〜 1.0)
+    const zoneStart = currentZone.range[0];
+    const zoneEnd = currentZone.range[1];
+    const zoneProgress = Math.max(0, Math.min(1, (stage - zoneStart) / (zoneEnd - zoneStart)));
+
+    // ★ゾーン内のワードを長さ(難易度)順にソートして、進捗に合わせて抽選範囲を変える
+    const sortedZakoWords = [...currentZone.zako].sort((a, b) => a.romaji.length - b.romaji.length);
+    
+    // 抽選ウィンドウのサイズ (最低3単語は候補に入れる)
+    const windowSize = Math.max(3, Math.floor(sortedZakoWords.length * 0.6));
+    // 進捗に応じてウィンドウの中心をずらす
+    const maxStartIndex = sortedZakoWords.length - windowSize;
+    const startIndex = Math.floor(zoneProgress * maxStartIndex);
+    const candidateWords = sortedZakoWords.slice(startIndex, startIndex + windowSize);
 
     const enemies = [];
     const normalTypes = ['SLIME', 'BAT', 'GOBLIN', 'WOLF', 'SKELETON'];
     const bossTypes = ['DRAGON', 'DEMON'];
 
+    // 敵の強さ計算 (100階層までなだらかに上昇)
+    const attackIntervalBase = Math.max(1000, 5000 - ((stage - 1) * 40));
+
     // 1〜9匹目 (ザコ敵)
     for (let i = 0; i < 9; i++) {
-      // ゾーンごとのザコ敵リストから抽選
-      const word = currentZone.zako[Math.floor(Math.random() * currentZone.zako.length)];
+      const word = candidateWords[Math.floor(Math.random() * candidateWords.length)];
       
       const typeKey = normalTypes[Math.floor(Math.random() * normalTypes.length)];
       const typeData = MONSTER_TYPES[typeKey];
@@ -253,15 +275,13 @@ export default function TypingGame() {
         type: typeKey,
         hp: Math.max(1, enemyHp), maxHp: Math.max(1, enemyHp),
         word: word, isBoss: false,
-        attackInterval: Math.max(2000, 6000 - (stage * 200)), 
+        attackInterval: attackIntervalBase, 
         currentAttackGauge: 0
       });
     }
     
     // 10匹目 (フロアボス)
-    // ゾーンごとのボスリストから抽選
     const bossWord = currentZone.boss[Math.floor(Math.random() * currentZone.boss.length)];
-    
     const bossTypeKey = bossTypes[Math.floor(Math.random() * bossTypes.length)];
     const bossData = MONSTER_TYPES[bossTypeKey];
     const bossHp = Math.floor(eff.battle.atk * 4 * (1 + stage * 0.3));
@@ -272,16 +292,16 @@ export default function TypingGame() {
       type: bossTypeKey,
       hp: bossHp, maxHp: bossHp,
       word: bossWord, isBoss: true,
-      attackInterval: Math.max(1500, 4000 - (stage * 150)),
+      attackInterval: Math.max(800, attackIntervalBase * 0.8), 
       currentAttackGauge: 0
     });
 
     setBattleState({
       stage: stage, 
-      zoneName: currentZone.name, // ゾーン名をStateに追加（UI表示用）
+      zoneName: currentZone.name,
       enemies: enemies, currentEnemyIndex: 0,
       playerHp: eff.battle.maxHp, playerMaxHp: eff.battle.maxHp,
-      log: [`${currentZone.name} (B${stage}F) に到達した！`], // ログにもゾーン名を表示
+      log: [`${currentZone.name} (B${stage}F) に到達した！`],
       isOver: false, lastTick: Date.now(),
       isBossDefeated: false, lastDamageType: null, lastDamageTime: 0,
       statusAilments: { poison: false, paralysis: false },
@@ -299,20 +319,18 @@ export default function TypingGame() {
     setEquipped(prev => ({ ...prev, [slot]: null }));
   };
 
-  // 1. バトル勝利時の処理（一時データ作成・宝箱生成）
   const handleWin = (stage, resultData = {}) => {
     const { clearTime = 0, typeCount = 0, missCount = 0, missedWords = {}, missedKeys = {} } = resultData;
     const score = calculateScore(stage, clearTime, missCount);
     const cpm = calculateCPM(typeCount, clearTime);
     const gold = stage * 100 + Math.floor(Math.random() * 50);
     
-    // ★確定で入手する道具（消耗品）
+    // 確定で入手する道具
     const fixedConsumable = generateConsumable();
     
-    // ★3つの宝箱を生成
+    // 3つの宝箱を生成
     const chests = getTreasureChests();
 
-    // 宝箱選択画面へ移行するためのデータ保持
     setTempResultData({
       stage,
       gold,
@@ -327,16 +345,12 @@ export default function TypingGame() {
     });
     
     setTreasureChests(chests);
-    setGameState('TREASURE'); // 宝箱選択画面へ
+    setGameState('TREASURE');
   };
 
-  // 2. 宝箱選択後の処理（装備品確定・最終リザルトへ）
   const handleChestSelect = (selectedChest) => {
     if (!tempResultData) return;
-
-    // 選ばれた宝箱から装備品を生成
     const equipment = openTreasureChest(selectedChest, player.level, player.job);
-    
     const { stage, gold, fixedConsumable, missedWords, missedKeys, clearTime, typeCount, missCount } = tempResultData;
     
     let newPlayer = { ...player };
@@ -344,7 +358,7 @@ export default function TypingGame() {
     newPlayer.exp += stage * 50;
     
     if (!newPlayer.records) newPlayer.records = { totalTypes: 0, totalMiss: 0, dungeonClears: 0, arenaChallenges: 0, missedWords: {}, missedKeys: {}, daily: {} };
-    newPlayer.records.totalTypes += (typeCount || 0); // resultDataから渡ってきていない場合は0
+    newPlayer.records.totalTypes += (typeCount || 0); 
     newPlayer.records.totalMiss += missCount;
     newPlayer.records.dungeonClears += 1;
     
@@ -375,21 +389,19 @@ export default function TypingGame() {
     if (stage === newPlayer.maxStage) newPlayer.maxStage += 1;
     
     setPlayer(newPlayer);
-    
-    // ★道具と装備の両方をインベントリに追加
     setInventory(prev => [...prev, fixedConsumable, equipment]);
     
     setModalMessage({ 
       type: 'WIN', 
       title: 'STAGE CLEAR!', 
       gold, 
-      items: [fixedConsumable, equipment], // ★複数アイテム表示に対応
+      items: [fixedConsumable, equipment], 
       levelUpInfo, 
       scoreInfo: { score: tempResultData.score, cpm: tempResultData.cpm, missCount, clearTime } 
     });
     
     setGameState('RESULT');
-    setTempResultData(null); // クリア
+    setTempResultData(null); 
   };
 
   const handleLose = () => {
@@ -480,8 +492,6 @@ export default function TypingGame() {
           onResume={() => setGameState('TOWN')} 
           difficulty={difficulty} 
           setDifficulty={setDifficulty}
-          onShowAuth={() => setShowAuth(true)}
-          onMultiplayer={() => setGameState('LOBBY')} 
           onGuestMultiplayer={handleGuestMultiplayer} 
           onDelete={async () => {
              if(window.confirm('本当にデータを削除しますか？（復元できません）')) {
@@ -520,6 +530,7 @@ export default function TypingGame() {
           onLogout={handleLogout} 
           onClassChange={() => setGameState('CLASS_CHANGE')} 
           difficulty={difficulty} 
+          setDifficulty={setDifficulty} // ★追加: 難易度変更用
           onStartArena={handleStartArena} 
           isGuest={isGuest} 
         />
@@ -542,7 +553,6 @@ export default function TypingGame() {
         />
       }
 
-      {/* ★宝箱選択画面 */}
       {gameState === 'TREASURE' && (
         <TreasureSelectionModal 
           chests={treasureChests}
