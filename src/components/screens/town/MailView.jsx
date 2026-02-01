@@ -1,137 +1,189 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, Send, ArrowLeft, User } from 'lucide-react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore'; // updateDoc, doc 追加
+import { Mail, Send, User, ArrowLeft, Clock } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where, doc, getDoc } from 'firebase/firestore';
 import { db, GAME_APP_ID } from '../../../lib/firebase';
+import { JOBS } from '../../../constants/data';
 
 const MailView = ({ player, initialTarget, onClose }) => {
-  const [targetFriend, setTargetFriend] = useState(initialTarget);
   const [friends, setFriends] = useState([]);
+  const [targetFriend, setTargetFriend] = useState(initialTarget);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
+  const [friendLatestProfile, setFriendLatestProfile] = useState({});
   const scrollRef = useRef(null);
 
-  // フレンドリスト取得
+  // 1. フレンドリストの取得
   useEffect(() => {
     const q = collection(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friends');
-    const unsub = onSnapshot(q, (snap) => {
-      setFriends(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setFriends(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return () => unsub();
   }, [player.id]);
 
-  // メッセージ監視 & 既読処理
+  // 2. 選択中の相手の最新プロフィール取得（チャット中用）
+  useEffect(() => {
+    const fetchLatestProfile = async () => {
+      if (!targetFriend) return;
+      try {
+        const userRef = doc(db, 'artifacts', GAME_APP_ID, 'users', targetFriend.id, 'saveData', 'current');
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          setFriendLatestProfile(data.player || {});
+        }
+      } catch (e) {
+        console.error("Latest profile fetch error:", e);
+      }
+    };
+    fetchLatestProfile();
+  }, [targetFriend]);
+
+  // 3. メッセージ購読
   useEffect(() => {
     if (!targetFriend) return;
-
     const participants = [player.id, targetFriend.id].sort();
-    
     const q = query(
       collection(db, 'artifacts', GAME_APP_ID, 'chats'),
       where('participants', '==', participants),
       orderBy('createdAt', 'asc')
     );
-
-    const unsub = onSnapshot(q, (snap) => {
-      const msgs = [];
-      snap.docs.forEach(d => {
-        const data = d.data();
-        const msg = { id: d.id, ...data };
-        msgs.push(msg);
-
-        // ★追加: 相手からのメッセージで、かつ未読の場合は既読にする
-        if (data.senderId !== player.id && data.read === false) {
-          updateDoc(doc(db, 'artifacts', GAME_APP_ID, 'chats', d.id), {
-            read: true
-          }).catch(e => console.error("Read update error:", e));
-        }
-      });
-      setMessages(msgs);
-
-      setTimeout(() => {
-        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }, 100);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
     });
-
-    return () => unsub();
+    return () => unsubscribe();
   }, [targetFriend, player.id]);
 
-  const handleSend = async () => {
+  const handleSend = async (e) => {
+    if (e) e.preventDefault();
     if (!inputText.trim() || !targetFriend) return;
-    
     const participants = [player.id, targetFriend.id].sort();
-    
+    const msgText = inputText;
+    setInputText('');
     try {
       await addDoc(collection(db, 'artifacts', GAME_APP_ID, 'chats'), {
         participants,
         senderId: player.id,
-        text: inputText,
-        read: false, // ★追加: 未読状態で作成
+        senderName: player.name,
+        senderJob: player.profileJob || player.job, 
+        text: msgText,
+        read: false,
         createdAt: serverTimestamp()
       });
-      setInputText('');
-    } catch (e) {
-      console.error(e);
-      alert('送信失敗');
-    }
+    } catch (e) { console.error("Send error:", e); }
   };
 
-  // 相手選択画面
+  // 共通プロフィール画像コンポーネント
+  const ProfileImage = ({ job, gender, race, size = "w-10 h-10" }) => {
+    const JobIllustration = JOBS[job]?.Illustration;
+    return (
+      <div className={`${size} rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0 flex items-center justify-center shadow-inner`}>
+        {JobIllustration ? (
+          <JobIllustration gender={gender || 'MALE'} race={race || 'HUMAN'} />
+        ) : (
+          <User size={size === "w-8 h-8" ? 16 : 20} className="text-slate-400" />
+        )}
+      </div>
+    );
+  };
+
+  // ★追加: フレンドリストの各項目で最新プロフィールを読み込むコンポーネント
+  const FriendListItem = ({ friend, onSelect }) => {
+    const [latestJob, setLatestJob] = useState(friend.profileJob || friend.job);
+
+    useEffect(() => {
+      // リスト表示時にも最新の profileJob を取りに行く
+      const updateIcon = async () => {
+        const userRef = doc(db, 'artifacts', GAME_APP_ID, 'users', friend.id, 'saveData', 'current');
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.player?.profileJob) {
+            setLatestJob(data.player.profileJob);
+          }
+        }
+      };
+      updateIcon();
+    }, [friend.id]);
+
+    return (
+      <div 
+        onClick={() => onSelect(friend)} 
+        className="p-3 bg-white border border-slate-100 rounded-2xl flex items-center gap-4 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all shadow-sm"
+      >
+        <ProfileImage job={latestJob} gender={friend.gender} race={friend.race} />
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-slate-700 truncate">{friend.name}</div>
+          <div className="text-[10px] text-slate-400">Lv.{friend.level} {JOBS[friend.job]?.name || '冒険者'}</div>
+        </div>
+      </div>
+    );
+  };
+
   if (!targetFriend) {
     return (
-      <div className="h-full flex flex-col bg-white/90 backdrop-blur-md animate-fade-in">
+      <div className="h-full flex flex-col bg-white/90 backdrop-blur-md animate-fade-in no-scrollbar">
         <div className="p-4 border-b border-slate-200 flex items-center gap-2">
-          <Mail className="text-blue-500" />
-          <h2 className="font-bold text-slate-800">メール / チャット</h2>
+          <Mail className="text-blue-500" size={20} />
+          <h2 className="font-bold text-slate-800">チャット</h2>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="text-xs font-bold text-slate-500 mb-2">会話するフレンドを選択</div>
-          {friends.length === 0 && <div className="text-center text-slate-400 py-10">フレンドがいません</div>}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">フレンドを選択</div>
           {friends.map(f => (
-            <div key={f.id} onClick={() => setTargetFriend(f)} className="p-3 bg-white border rounded mb-2 flex items-center gap-3 cursor-pointer hover:bg-slate-50">
-              <div className="bg-slate-200 p-2 rounded-full"><User size={16}/></div>
-              <div className="font-bold text-slate-700">{f.name}</div>
-            </div>
+            <FriendListItem key={f.id} friend={f} onSelect={setTargetFriend} />
           ))}
+          {friends.length === 0 && (
+            <div className="text-center py-10 text-slate-400 text-sm">フレンドがいません</div>
+          )}
         </div>
       </div>
     );
   }
 
-  // チャット画面
+  const displayTargetJob = friendLatestProfile.profileJob || friendLatestProfile.job || targetFriend.profileJob || targetFriend.job;
+
   return (
     <div className="h-full flex flex-col bg-slate-50 animate-fade-in">
-      <div className="p-3 bg-white border-b flex items-center gap-2 shadow-sm z-10">
-        <button onClick={() => setTargetFriend(null)} className="p-1 rounded hover:bg-slate-100"><ArrowLeft size={20}/></button>
-        <span className="font-bold text-slate-700">{targetFriend.name}</span>
+      <div className="p-3 bg-white border-b flex items-center gap-3 shadow-sm z-10">
+        <button onClick={() => { setTargetFriend(null); setFriendLatestProfile({}); }} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
+          <ArrowLeft size={20} className="text-slate-500" />
+        </button>
+        <ProfileImage job={displayTargetJob} gender={targetFriend.gender} race={targetFriend.race} size="w-8 h-8" />
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-sm text-slate-800 truncate">{targetFriend.name}</div>
+          <div className="text-[9px] text-green-500 font-bold flex items-center gap-1">
+            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> ONLINE
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
-        {messages.map(msg => {
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar" ref={scrollRef}>
+        {messages.map((msg, idx) => {
           const isMe = msg.senderId === player.id;
+          const currentJob = isMe ? (player.profileJob || player.job) : (msg.senderJob || displayTargetJob);
           return (
-            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[70%] p-3 rounded-xl text-sm shadow-sm ${isMe ? 'bg-blue-500 text-white rounded-tr-none' : 'bg-white border border-slate-200 rounded-tl-none'}`}>
+            <div key={msg.id || idx} className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+              <ProfileImage job={currentJob} gender={isMe ? player.gender : targetFriend.gender} race={isMe ? player.race : targetFriend.race} size="w-8 h-8" />
+              <div className={`max-w-[75%] p-3 rounded-2xl text-sm shadow-sm ${
+                isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-slate-700 border border-slate-100 rounded-bl-none'
+              }`}>
                 {msg.text}
-                {isMe && <div className={`text-[9px] text-right mt-1 ${msg.read ? 'text-blue-200' : 'text-blue-300'}`}>{msg.read ? '既読' : '未読'}</div>}
+                <div className={`text-[8px] mt-1 opacity-60 flex items-center gap-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
 
-      <div className="p-3 bg-white border-t flex gap-2">
-        <input 
-          type="text" 
-          value={inputText}
-          onChange={e => setInputText(e.target.value)}
-          className="flex-1 border border-slate-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-blue-500"
-          placeholder="メッセージを入力..."
-          onKeyPress={e => e.key === 'Enter' && handleSend()}
-        />
-        <button onClick={handleSend} className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors">
+      <form onSubmit={handleSend} className="p-3 bg-white border-t flex gap-2">
+        <input type="text" value={inputText} onChange={e => setInputText(e.target.value)} className="flex-1 border border-slate-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" placeholder="メッセージを入力..." />
+        <button type="submit" disabled={!inputText.trim()} className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-all shadow-md disabled:bg-slate-300">
           <Send size={18} />
         </button>
-      </div>
+      </form>
     </div>
   );
 };

@@ -37,11 +37,15 @@ export const generateConsumable = () => {
       rarity: 'n',
       stats: { wt: 0 },
       value: data.price,
-      jobReq: null // 道具は全職使用可能
+      jobReq: null,
+      imageId: null // 消耗品画像を追加する場合はここを設定
     };
 };
 
-// ★拡張: forceRarityKey, forceEquipment を追加
+/**
+ * アイテム生成メインロジック
+ * 既存のステータス計算などは維持し、imageId の割り当て処理を追加
+ */
 export const generateItem = (playerLevel, jobType = null, forceRarityKey = null, forceEquipment = false) => {
   // 30%の確率で消耗品を生成 (強制装備生成モードでない場合)
   if (!forceEquipment && !forceRarityKey && Math.random() < 0.3) {
@@ -51,7 +55,6 @@ export const generateItem = (playerLevel, jobType = null, forceRarityKey = null,
   // レアリティの決定
   let rarity;
   if (forceRarityKey) {
-    // 宝箱などでレアリティ指定がある場合
     rarity = RARITY[forceRarityKey]; 
   } else {
     rarity = getRarity();
@@ -75,20 +78,19 @@ export const generateItem = (playerLevel, jobType = null, forceRarityKey = null,
   
   let name = `${adj}${typeName}`;
   let stats = { atk: 0, def: 0, wt: 0 };
-  let jobReq = null; // nullなら全職装備可能
+  let jobReq = null;
 
   let baseWt = getRandomInt(1, 4) + Math.floor(playerLevel / 10);
   if (adj === '重厚な') baseWt += 4;
   if (adj === '軽量な') baseWt = Math.max(1, baseWt - 2);
 
-  // 武器の生成 (職業制限あり)
+  // 武器・防具の個別ステータス設定
   if (typeKey === 'WEAPON') {
      let targetJob = jobType;
      if (!targetJob) {
         const jobKeys = Object.keys(JOBS);
         targetJob = JOBS[jobKeys[Math.floor(Math.random() * jobKeys.length)]].id;
      }
-     
      jobReq = [targetJob]; 
 
      if (targetJob === 'fighter') {
@@ -114,22 +116,16 @@ export const generateItem = (playerLevel, jobType = null, forceRarityKey = null,
        name = `${adj}弓`;
        stats.atk = Math.floor(baseVal * 0.9);
        stats.wt = baseWt + 1;
-     } else {
-       name = `${adj}武器`;
-       stats.atk = baseVal;
      }
   } 
   else if (typeKey === 'HEAD') {
     const jobKeys = Object.keys(JOBS);
     const targetJob = JOBS[jobKeys[Math.floor(Math.random() * jobKeys.length)]].id;
     jobReq = [targetJob];
-
     if (targetJob === 'fighter') name = `${adj}兜`;
     else if (targetJob === 'mage') name = `${adj}ハット`;
     else if (targetJob === 'monk') name = `${adj}バンダナ`;
     else if (targetJob === 'archer') name = `${adj}フード`;
-    else name = `${adj}兜`;
-
     stats.def = Math.floor(baseVal * 0.5);
     stats.wt = baseWt;
   } 
@@ -157,6 +153,15 @@ export const generateItem = (playerLevel, jobType = null, forceRarityKey = null,
     name = `${name} ${uniqueCode}`;
   }
 
+  // --- 画像割り当てロジック (ここに追加) ---
+  let imageId = null;
+  if (typeKey === 'WEAPON' && name.includes('剣')) {
+    imageId = 'beginner_sword.png'; // 剣には作成済みの画像を割り当て
+  }
+  // 今後画像が増えたら以下のように追加可能
+  // else if (typeKey === 'BODY') { imageId = 'armor.png'; }
+  // ---------------------------------------
+
   return {
     id: generateId(),
     name,
@@ -166,11 +171,12 @@ export const generateItem = (playerLevel, jobType = null, forceRarityKey = null,
     value: baseVal * 10 * RARITY[rarity.id.toUpperCase()].priceMod,
     jobReq,
     uniqueCode,
-    locked: false 
+    locked: false,
+    imageId: imageId // 追加した imageId を含める
   };
 };
 
-// ★宝箱リストを生成する関数
+// 宝箱リストを生成する関数
 export const getTreasureChests = () => {
   const chests = [];
   for(let i=0; i<3; i++) {
@@ -185,11 +191,11 @@ export const getTreasureChests = () => {
   return chests;
 };
 
-// ★宝箱を開けてアイテムを生成する関数
+// 宝箱を開けてアイテムを生成する関数
 export const openTreasureChest = (chestType, playerLevel, jobType) => {
-  const ranks = chestType.ranks; // ['N', 'R'] etc.
-  const rankKey = ranks[Math.floor(Math.random() * ranks.length)]; // Randomly pick one
-  return generateItem(playerLevel, jobType, rankKey, true); // forceEquipment=true
+  const ranks = chestType.ranks;
+  const rankKey = ranks[Math.floor(Math.random() * ranks.length)];
+  return generateItem(playerLevel, jobType, rankKey, true);
 };
 
 export const calcInitialStats = (jobId, raceId, persId) => {
@@ -331,6 +337,5 @@ export const calculateDamageMultiplier = (attacker, defender) => {
   }
 
   multiplier = Math.round(multiplier * 100) / 100;
-
   return { multiplier, reasons };
 };
