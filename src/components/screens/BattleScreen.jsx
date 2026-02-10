@@ -562,9 +562,17 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
 
             <div className="relative">
               <div className={`w-32 h-32 ${enemy.isBoss ? 'bg-red-100 border-red-500' : 'bg-purple-100 border-purple-500'} rounded-xl border-4 flex items-center justify-center shadow-lg transition-all overflow-hidden`}>
-                <div className={`w-full h-full p-2 ${enemy.isBoss ? 'scale-125' : ''}`}>
-                   <MonsterIll />
-                </div>
+                {enemy.imageId ? (
+                  <img 
+                    src={`/monsters/${enemy.imageId}`} 
+                    alt={enemy.name}
+                    className={`w-full h-full object-contain p-2 ${enemy.isBoss ? 'scale-125' : ''}`}
+                    style={{ imageRendering: 'pixelated' }} // ドット絵をくっきり表示
+                  />
+                ) : (
+                  // 画像がない場合のフォールバック（以前のSVGなど）
+                  <div className="w-full h-full p-2"><MonsterIll /></div>
+                )}
               </div>
               <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-40 bg-slate-200 h-4 rounded-full border border-slate-300 overflow-hidden">
                 <div className="bg-red-500 h-full transition-all duration-200" style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} />

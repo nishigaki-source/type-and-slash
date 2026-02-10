@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { MONSTER_DATA } from './constants/monsters';
 
 import { auth, db, GAME_APP_ID } from './lib/firebase';
 import { JOBS, DIFFICULTY_SETTINGS, MONSTER_TYPES } from './constants/data';
@@ -228,46 +229,52 @@ export default function TypingGame() {
   };
 
   const startBattle = (stage) => {
-    refreshShop();
-    const eff = calculateEffectiveStats(player, equipped);
+  refreshShop();
+  const eff = calculateEffectiveStats(player, equipped);
+
+  // 2. 現在の階層に出現可能なモンスターをフィルタリング
+  const availableKeys = Object.keys(MONSTER_DATA).filter(key => {
+    const m = MONSTER_DATA[key];
+    return stage >= m.minFloor && stage <= m.maxFloor && !m.isBossOnly;
+  });
+
+  const enemies = [];
+  // 1〜9匹目の生成
+  for (let i = 0; i < 9; i++) {
+    const typeKey = availableKeys[Math.floor(Math.random() * availableKeys.length)] || 'SLIME';
+    const mData = MONSTER_DATA[typeKey];
     
-    // 現在の難易度設定を取得
-    const difficultyData = DIFFICULTY_SETTINGS[difficulty];
+    // モンスター固有のワードから抽選
+    const word = mData.words[Math.floor(Math.random() * mData.words.length)];
+    const enemyHp = Math.floor(eff.battle.atk * 0.8 * mData.hpMod * (1 + stage * 0.2));
+
+    enemies.push({
+      id: generateId(),
+      name: `${mData.name} Lv.${stage}`,
+      imageId: mData.imageId, // 画像表示用のIDを保持
+      type: typeKey,
+      hp: Math.max(1, enemyHp), 
+      maxHp: Math.max(1, enemyHp),
+      word: word,
+      isBoss: false,
+      attackInterval: Math.max(1000, 5000 - ((stage - 1) * 40)),
+      currentAttackGauge: 0
+    });
+  }
+
+    // MONSTER_DATAから現在の階層に出現可能なモンスターをフィルタリング
+    const availableMonsters = Object.keys(MONSTER_DATA).filter(key => {
+      const m = MONSTER_DATA[key];
+      return stage >= m.minFloor && stage <= m.maxFloor;
+    });
+
+    // 1〜9匹目の生成
+  for (let i = 0; i < 9; i++) {
+    const typeKey = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
+    const mData = MONSTER_DATA[typeKey];
     
-    // 現在の階層がどのゾーンに該当するか検索
-    const currentZone = difficultyData.zones.find(z => stage >= z.range[0] && stage <= z.range[1]) 
-                        || difficultyData.zones[difficultyData.zones.length - 1];
-
-    // ★ゾーン内での進捗率 (0.0 〜 1.0)
-    const zoneStart = currentZone.range[0];
-    const zoneEnd = currentZone.range[1];
-    const zoneProgress = Math.max(0, Math.min(1, (stage - zoneStart) / (zoneEnd - zoneStart)));
-
-    // ★ゾーン内のワードを長さ(難易度)順にソートして、進捗に合わせて抽選範囲を変える
-    const sortedZakoWords = [...currentZone.zako].sort((a, b) => a.romaji.length - b.romaji.length);
-    
-    // 抽選ウィンドウのサイズ (最低3単語は候補に入れる)
-    const windowSize = Math.max(3, Math.floor(sortedZakoWords.length * 0.6));
-    // 進捗に応じてウィンドウの中心をずらす
-    const maxStartIndex = sortedZakoWords.length - windowSize;
-    const startIndex = Math.floor(zoneProgress * maxStartIndex);
-    const candidateWords = sortedZakoWords.slice(startIndex, startIndex + windowSize);
-
-    const enemies = [];
-    const normalTypes = ['SLIME', 'BAT', 'GOBLIN', 'WOLF', 'SKELETON'];
-    const bossTypes = ['DRAGON', 'DEMON'];
-
-    // 敵の強さ計算 (100階層までなだらかに上昇)
-    const attackIntervalBase = Math.max(1000, 5000 - ((stage - 1) * 40));
-
-    // 1〜9匹目 (ザコ敵)
-    for (let i = 0; i < 9; i++) {
-      const word = candidateWords[Math.floor(Math.random() * candidateWords.length)];
-      
-      const typeKey = normalTypes[Math.floor(Math.random() * normalTypes.length)];
-      const typeData = MONSTER_TYPES[typeKey];
-      const baseHp = eff.battle.atk * 0.8 * typeData.hpMod; 
-      const enemyHp = Math.floor(baseHp * (1 + stage * 0.2));
+    // モンスター固有のワードリストから抽選
+    const word = mData.words[Math.floor(Math.random() * mData.words.length)];
       
       enemies.push({
         id: generateId(),
