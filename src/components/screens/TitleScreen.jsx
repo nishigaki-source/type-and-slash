@@ -26,45 +26,48 @@ const TitleScreen = ({
   };
 
   return (
-    <div className="w-full h-full bg-slate-900 text-white relative overflow-y-auto">
+    <div className="w-full h-full text-white relative overflow-hidden bg-slate-900">
       
-      {/* 背景エフェクト */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-[radial-gradient(circle,rgba(30,58,138,0.3)_0%,transparent_60%)] animate-pulse-slow"></div>
+      {/* 1. 指定の背景画像設定 */}
+      <div 
+      className="absolute inset-0 z-0 bg-no-repeat bg-cover animate-pulse-slow"
+      style={{
+        backgroundImage: `url('/backgrounds/title_bg.png')`,
+        backgroundPosition: 'center',
+        transform: 'scale(1.05)',
+      }}
+    />
+
+      {/* 2. 背景を暗くし、ブラー（ぼかし）をかけてUIの視認性を上げるオーバーレイ */}
+      <div className="absolute inset-0 z-0 bg-slate-900/20 backdrop-blur-[0px]" />
+
+      {/* 装飾用背景エフェクト（従来の放射状グラデーションも活かす） */}
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none opacity-50">
+        <div className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] bg-[radial-gradient(circle,rgba(30,58,138,0.4)_0%,transparent_60%)] animate-pulse-slow"></div>
         <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
       </div>
 
       {/* コンテンツラッパー */}
-      <div className="w-full min-h-full flex flex-col items-center justify-center py-12 relative z-10 px-4">
+      <div className="w-full min-h-full flex flex-col items-center py-12 relative z-10 px-4">
         
-        <div className="w-full max-w-sm flex flex-col items-center gap-6">
+        {/* 1. タイトルロゴの上部に大きな余白（mt-20など）を追加して押し下げる */}
+        <div className="w-full max-w-sm flex flex-col items-center gap-6 mt-32 md:mt-48">
+        <div className="h-80" />
           
-          {/* 1. タイトルロゴ */}
-          <div className="mb-2 animate-fade-in-down relative group flex justify-center">
-            <img 
-              src="/title_logo.png" 
-              alt="Type & Slash" 
-              className="w-[400px] max-w-full h-auto object-contain drop-shadow-[0_0_25px_rgba(59,130,246,0.6)] transition-transform duration-500 hover:scale-105"
-            />
-            {/* 装飾エフェクト */}
-            <div className="absolute -top-2 -right-4 text-yellow-400 animate-pulse">✨</div>
-            <div className="absolute bottom-2 -left-4 text-blue-400 animate-ping" style={{ animationDuration: '2s' }}>✨</div>
-          </div>
-
-          {/* プレイヤー情報がある場合のウェルカムメッセージ */}
+          {/* プレイヤー情報 */}
           {player && (
-            <div className="text-slate-400 text-sm font-bold animate-fade-in flex items-center gap-2 bg-slate-800/50 px-4 py-2 rounded-full border border-slate-700/50 backdrop-blur-sm">
+            <div className="text-slate-100 text-sm font-bold animate-fade-in flex items-center gap-2 bg-slate-900/80 px-4 py-2 rounded-full border border-slate-700/50 backdrop-blur-md">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
               Welcome back, <span className="text-blue-400">{player.name}</span> (Lv.{player.level})
             </div>
           )}
 
-          {/* 2. モード設定エリア (未ログイン時のみ表示) */}
+          {/* 難易度設定エリア (未ログイン時のみ表示) */}
           {!player && (
-            <div className="w-full bg-slate-800/60 backdrop-blur-sm p-5 rounded-2xl border border-slate-700 shadow-xl animate-slide-up">
+            <div className="w-full bg-slate-900/80 backdrop-blur-md p-5 rounded-2xl border border-slate-700 shadow-2xl animate-slide-up">
               <div className="flex items-center justify-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-wider mb-4">
                 <Settings size={14} className="animate-spin-slow" />
-                Difficulty Setting
+                ゲームモード
               </div>
               
               <div className="flex gap-2">
@@ -81,32 +84,30 @@ const TitleScreen = ({
             </div>
           )}
 
-          {/* 3. メインアクションボタン */}
+          {/* メインアクションボタン */}
           <div className="w-full space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
             
-            {/* 冒険を始める (青グラデーション) */}
             <button
               onClick={player ? onResume : onStartNew}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-lg font-bold py-4 rounded-xl shadow-lg shadow-blue-900/50 border border-blue-500/30 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 group"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-lg font-bold py-4 rounded-xl shadow-[0_10px_20px_rgba(0,0,0,0.4)] shadow-blue-900/40 border border-blue-500/30 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 group"
             >
               {player ? <Play className="fill-current" /> : <Sword size={24} />}
               {player ? '冒険を再開する' : '冒険を始める'}
             </button>
 
-            {/* ゲストで対戦 (ダークグレー) */}
             <button
               onClick={onGuestMultiplayer}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-lg font-bold py-4 rounded-xl shadow-lg border border-slate-600 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3"
+              className="w-full bg-slate-900/90 hover:bg-slate-800 text-slate-200 text-lg font-bold py-4 rounded-xl shadow-lg border border-slate-700 backdrop-blur-sm transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3"
             >
               <Gamepad2 size={24} />
               ゲストで対戦 (ロビー)
             </button>
           </div>
 
-          {/* 4. フッター (バージョン情報のみ) */}
+          {/* フッター */}
           <div className="mt-4 flex flex-col items-center gap-4 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-             <div className="text-slate-600 text-xs font-mono">
-                v1.2.0
+             <div className="text-slate-400 text-xs font-mono drop-shadow-md">
+                v1.2.0-SP
              </div>
           </div>
 

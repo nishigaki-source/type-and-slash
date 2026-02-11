@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { setMonsterData } from './constants/monsters';
 import { MONSTER_DATA } from './constants/monsters';
 
 import { auth, db, GAME_APP_ID } from './lib/firebase';
@@ -39,6 +40,7 @@ export default function TypingGame() {
   const [modalMessage, setModalMessage] = useState(null);
   const [shopItems, setShopItems] = useState([]);
   const [difficulty, setDifficulty] = useState('EASY'); // デフォルト難易度
+  const [dataLoaded, setDataLoaded] = useState(false); // 追加：CSV読み込み完了フラグ
   
   const [fbUser, setFbUser] = useState(null);
   const [isGuest, setIsGuest] = useState(false);
@@ -164,6 +166,167 @@ export default function TypingGame() {
     
     setGameState('TOWN');
   };
+  
+  // --- 出題ワードのデータ読み込み処理を追加 ---
+  const [floorWords, setFloorWords] = useState({ EASY: {}, NORMAL: {}, HARD: {} });
+
+  useEffect(() => {
+  const fetchAllFloorWords = async () => {
+    // それぞれのCSV URLを設定してください
+    const URLS = {
+      EASY: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUX7NWJ_6HA9gpX6yc3EGiSCL1GOiMAk6_Mp8gg2JuvuCgodmO4vARpOqx-8v8mXPQ8Zz1hkbgfkP-/pub?output=csv",
+      NORMAL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUX7NWJ_6HA9gpX6yc3EGiSCL1GOiMAk6_Mp8gg2JuvuCgodmO4vARpOqx-8v8mXPQ8Zz1hkbgfkP-/pub?output=csv",
+      HARD: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUX7NWJ_6HA9gpX6yc3EGiSCL1GOiMAk6_Mp8gg2JuvuCgodmO4vARpOqx-8v8mXPQ8Zz1hkbgfkP-/pub?output=csv"
+    };
+
+    const newFloorWords = { EASY: {}, NORMAL: {}, HARD: {} };
+
+    try {
+      for (const mode of ['EASY', 'NORMAL', 'HARD']) {
+        const response = await fetch(URLS[mode]);
+        const csvText = await response.text();
+        const rows = csvText.split(/\r?\n/).filter(row => row.trim() !== "").slice(1);
+
+        rows.forEach(row => {
+          const cols = row.split(',');
+          if (cols.length < 3) return;
+          const floor = cols[0].trim();
+          const displays = cols[1].split('|');
+          const romajis = cols[2].split('|');
+          
+          newFloorWords[mode][floor] = displays.map((d, i) => ({
+            display: d,
+            romaji: (romajis[i] || d).toLowerCase().trim()
+          }));
+        });
+      }
+      setFloorWords(newFloorWords);
+    } catch (e) {
+      console.error("ワードリストの読み込み失敗:", e);
+    }
+  };
+  
+  fetchAllFloorWords();
+}, []);
+
+  // --- モンスターデータ読み込み処理を追加 ---
+  useEffect(() => {
+    const fetchMonsters = async () => {
+      // 公開したCSVのURLをここに貼り付けてください
+      const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUYOn06FemGZsLKQrl8O-DfBZ8Jf9lOc-Swlhv3BgjIkuPx-dUNyOk2z301fbUgdbJYLQSUprYL8jq/pub?gid=0&single=true&output=csv"; 
+      
+      try {
+        const response = await fetch(SHEET_CSV_URL);
+        const csvText = await response.text();
+        
+        // 改行コードで分割し、空行を除外してヘッダーを飛ばす
+        const rows = csvText.split(/\r?\n/).filter(row => row.trim() !== "").slice(1);
+        const newMonsterData = {};
+        
+        rows.forEach(row => {
+          // カンマ区切りで分割（単純な分割ですが、CSVにカンマデータが含まれる場合は注意）
+          const cols = row.split(',');
+          if (cols.length < 11) return;
+          
+          const key = cols[0].trim();
+          newMonsterData[key] = {
+            name: cols[1].trim(),
+            imageId: cols[2].trim(),
+            hpMod: parseFloat(cols[3]) || 1.0,
+            minFloor: parseInt(cols[4]) || 1,
+            maxFloor: parseInt(cols[5]) || 100,
+            displaySize: parseInt(cols[6]) || 128,
+            isBossOnly: cols[7].trim().toUpperCase() === 'TRUE',
+            words: {
+            EASY: cols[8].trim().split('|').map(w => ({ 
+              display: w, 
+              romaji: w.toLowerCase() 
+            })), // ← ここにカンマが必要です
+            NORMAL: cols[9].trim().split('|').map(w => ({ 
+              display: w, 
+              romaji: w.toLowerCase() 
+            })), // ← ここにもカンマが必要です
+            HARD: cols[10].trim().split('|').map(w => ({ 
+              display: w, 
+              romaji: w.toLowerCase() 
+            }))
+          }
+          };
+        });
+        
+        setMonsterData(newMonsterData);
+      } catch (e) {
+        console.error("モンスターデータの読み込みに失敗しました:", e);
+      } finally {
+        setDataLoaded(true);
+      }
+    };
+    fetchMonsters();
+  }, []);
+
+  const startBattle = (stage) => {
+  refreshShop();
+  if (!MONSTER_DATA || Object.keys(MONSTER_DATA).length === 0) return;
+
+  const eff = calculateEffectiveStats(player, equipped);
+
+  // そのフロア・その難易度のワードリストを取得（存在しない場合は1Fを参照）
+  const wordPool = floorWords[difficulty][stage] || floorWords[difficulty]["1"] || [{display: "Ready", romaji: "ready"}];
+
+  const enemies = [];
+  const attackIntervalBase = Math.max(1000, 5000 - ((stage - 1) * 40));
+
+  for (let i = 0; i < 10; i++) {
+    const isBoss = (i === 9);
+    
+    // 1. 姿の抽選：その階層に出現可能なモンスターから選ぶ
+    const availableKeys = Object.keys(MONSTER_DATA).filter(key => {
+      const m = MONSTER_DATA[key];
+      return stage >= m.minFloor && stage <= m.maxFloor && (isBoss ? true : !m.isBossOnly);
+    });
+    const typeKey = availableKeys[Math.floor(Math.random() * availableKeys.length)] || Object.keys(MONSTER_DATA)[0];
+    const mData = MONSTER_DATA[typeKey];
+
+    // 2. ワードの抽選：フロア別プールからランダムに選ぶ
+    const word = wordPool[Math.floor(Math.random() * wordPool.length)];
+
+    enemies.push({
+      id: generateId(),
+      name: isBoss ? `BOSS: ${mData.name}` : `${mData.name}`,
+      imageId: mData.imageId,
+      type: typeKey,
+      hp: isBoss ? Math.floor(eff.battle.atk * 5 * (1 + stage * 0.3)) : Math.max(1, Math.floor(eff.battle.atk * 0.8 * mData.hpMod * (1 + stage * 0.2))),
+      maxHp: isBoss ? Math.floor(eff.battle.atk * 5 * (1 + stage * 0.3)) : Math.max(1, Math.floor(eff.battle.atk * 0.8 * mData.hpMod * (1 + stage * 0.2))),
+      word: word, 
+      isBoss: isBoss,
+      attackInterval: isBoss ? Math.max(800, attackIntervalBase * 0.75) : attackIntervalBase,
+      currentAttackGauge: 0
+    });
+  }
+
+  // ゾーン情報の特定（ログ表示用）
+  const difficultyData = DIFFICULTY_SETTINGS[difficulty] || DIFFICULTY_SETTINGS.EASY;
+  const currentZone = difficultyData.zones.find(z => stage >= z.range[0] && stage <= z.range[1]) 
+                      || difficultyData.zones[difficultyData.zones.length - 1];
+
+  setBattleState({
+    stage,
+    zoneName: currentZone.name,
+    enemies,
+    currentEnemyIndex: 0,
+    playerHp: eff.battle.maxHp,
+    playerMaxHp: eff.battle.maxHp,
+    log: [`${currentZone.name} (B${stage}F) に突入！`],
+    isOver: false,
+    lastTick: Date.now(),
+    isBossDefeated: false,
+    lastDamageType: null,
+    lastDamageTime: 0,
+    statusAilments: { poison: false, paralysis: false },
+    buffs: { str: 0, vit: 0, agi: 0, dex: 0 }
+  });
+  setGameState('BATTLE');
+};
 
   const handleGuestStart = async () => {
      try {
@@ -226,95 +389,6 @@ export default function TypingGame() {
     setEquipped(newEquipped);
     setGameState('TOWN');
     alert(`${JOBS[newJobId].name} に転職しました！\nステータスが再計算されました。`);
-  };
-
-  const startBattle = (stage) => {
-  refreshShop();
-  const eff = calculateEffectiveStats(player, equipped);
-
-  // 2. 現在の階層に出現可能なモンスターをフィルタリング
-  const availableKeys = Object.keys(MONSTER_DATA).filter(key => {
-    const m = MONSTER_DATA[key];
-    return stage >= m.minFloor && stage <= m.maxFloor && !m.isBossOnly;
-  });
-
-  const enemies = [];
-  // 1〜9匹目の生成
-  for (let i = 0; i < 9; i++) {
-    const typeKey = availableKeys[Math.floor(Math.random() * availableKeys.length)] || 'SLIME';
-    const mData = MONSTER_DATA[typeKey];
-    
-    // モンスター固有のワードから抽選
-    const word = mData.words[Math.floor(Math.random() * mData.words.length)];
-    const enemyHp = Math.floor(eff.battle.atk * 0.8 * mData.hpMod * (1 + stage * 0.2));
-
-    enemies.push({
-      id: generateId(),
-      name: `${mData.name} Lv.${stage}`,
-      imageId: mData.imageId, // 画像表示用のIDを保持
-      type: typeKey,
-      hp: Math.max(1, enemyHp), 
-      maxHp: Math.max(1, enemyHp),
-      word: word,
-      isBoss: false,
-      attackInterval: Math.max(1000, 5000 - ((stage - 1) * 40)),
-      currentAttackGauge: 0
-    });
-  }
-
-    // MONSTER_DATAから現在の階層に出現可能なモンスターをフィルタリング
-    const availableMonsters = Object.keys(MONSTER_DATA).filter(key => {
-      const m = MONSTER_DATA[key];
-      return stage >= m.minFloor && stage <= m.maxFloor;
-    });
-
-    // 1〜9匹目の生成
-  for (let i = 0; i < 9; i++) {
-    const typeKey = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
-    const mData = MONSTER_DATA[typeKey];
-    
-    // モンスター固有のワードリストから抽選
-    const word = mData.words[Math.floor(Math.random() * mData.words.length)];
-      
-      enemies.push({
-        id: generateId(),
-        name: `${typeData.name} Lv.${stage}`,
-        type: typeKey,
-        hp: Math.max(1, enemyHp), maxHp: Math.max(1, enemyHp),
-        word: word, isBoss: false,
-        attackInterval: attackIntervalBase, 
-        currentAttackGauge: 0
-      });
-    }
-    
-    // 10匹目 (フロアボス)
-    const bossWord = currentZone.boss[Math.floor(Math.random() * currentZone.boss.length)];
-    const bossTypeKey = bossTypes[Math.floor(Math.random() * bossTypes.length)];
-    const bossData = MONSTER_TYPES[bossTypeKey];
-    const bossHp = Math.floor(eff.battle.atk * 4 * (1 + stage * 0.3));
-
-    enemies.push({
-      id: generateId(),
-      name: `BOSS: ${bossData.name} Lv.${stage}`,
-      type: bossTypeKey,
-      hp: bossHp, maxHp: bossHp,
-      word: bossWord, isBoss: true,
-      attackInterval: Math.max(800, attackIntervalBase * 0.8), 
-      currentAttackGauge: 0
-    });
-
-    setBattleState({
-      stage: stage, 
-      zoneName: currentZone.name,
-      enemies: enemies, currentEnemyIndex: 0,
-      playerHp: eff.battle.maxHp, playerMaxHp: eff.battle.maxHp,
-      log: [`${currentZone.name} (B${stage}F) に到達した！`],
-      isOver: false, lastTick: Date.now(),
-      isBossDefeated: false, lastDamageType: null, lastDamageTime: 0,
-      statusAilments: { poison: false, paralysis: false },
-      buffs: { str: 0, vit: 0, agi: 0, dex: 0 }
-    });
-    setGameState('BATTLE');
   };
 
   const handleEquip = (item) => {
@@ -481,6 +555,17 @@ export default function TypingGame() {
 
   if (showAuth) {
     return <AuthScreen onLogin={handleAuthSuccess} onGuest={handleGuestStart} onBack={() => setShowAuth(false)} />;
+  }
+
+  if (!dataLoaded) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-900 text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-lg font-bold">データ読み込み中...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

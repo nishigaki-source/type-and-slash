@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Skull, Zap, ArrowRight, AlertTriangle, LogOut } from 'lucide-react';
 import { SVGs } from '../GameSvgs';
 import { MONSTER_TYPES, JOBS, CONSUMABLES } from '../../constants/data';
+import { MONSTER_DATA } from '../../constants/monsters'; 
 import { calculateEffectiveStats } from '../../utils/gameLogic';
 
 // -----------------------------------------------------------------------------
@@ -533,66 +534,77 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
 
       {/* メインバトル画面 */}
       <div className="flex-1 flex items-center justify-between px-10 relative z-10 max-w-6xl mx-auto w-full mb-32">
+        {/* プレイヤー側 (左) */}
         <div className={`flex flex-col items-center transition-all duration-100 ${damageAnim === 'DAMAGE' ? 'translate-x-[-10px] text-red-500' : ''}`}>
-            <div className="relative">
-              <div className={`w-32 h-32 bg-slate-100 rounded-full border-4 border-blue-500 flex items-center justify-center shadow-lg overflow-hidden ${Object.values(battleState.buffs).some(v => v > 0) ? 'shadow-[0_0_40px_rgba(251,146,60,0.5)]' : ''}`}>
-                <PlayerIll gender={player.gender} race={player.race} />
-              </div>
-              <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-40 bg-slate-200 h-4 rounded-full border border-slate-300 overflow-hidden">
-                <div className="bg-green-500 h-full transition-all duration-300" style={{ width: `${(battleState.playerHp / eff.battle.maxHp) * 100}%` }} />
-              </div>
+          <div className="relative">
+            <div className={`w-32 h-32 bg-slate-100 rounded-full border-4 border-blue-500 flex items-center justify-center shadow-lg overflow-hidden ${Object.values(battleState.buffs).some(v => v > 0) ? 'shadow-[0_0_40px_rgba(251,146,60,0.5)]' : ''}`}>
+              <PlayerIll gender={player.gender} race={player.race} />
             </div>
-            <div className="mt-6 text-center">
-              <div className="font-bold text-lg text-slate-800">{player.name}</div>
-              <div className="font-mono text-xl text-slate-600">{battleState.playerHp} / {eff.battle.maxHp}</div>
+            <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-40 bg-slate-200 h-4 rounded-full border border-slate-300 overflow-hidden">
+              <div className="bg-green-500 h-full transition-all duration-300" style={{ width: `${(battleState.playerHp / eff.battle.maxHp) * 100}%` }} />
             </div>
-            {damageAnim === 'DAMAGE' && <div className="absolute top-0 text-red-500 font-bold text-2xl animate-bounce">Hit!</div>}
-            {damageAnim === 'DODGE' && <div className="absolute top-0 text-blue-500 font-bold text-2xl animate-pulse">Dodge!</div>}
+          </div>
+          <div className="mt-6 text-center">
+            <div className="font-bold text-lg text-slate-800">{player.name}</div>
+            <div className="font-mono text-xl text-slate-600">{battleState.playerHp} / {eff.battle.maxHp}</div>
+          </div>
         </div>
 
         <div className="text-4xl font-black text-slate-300 italic opacity-50">VS</div>
 
+        {/* モンスター側 (右) - 縦並び構造に修正 */}
         <div className={`flex flex-col items-center transition-all duration-200 ${animEffect === 'ATTACK' || animEffect === 'CRITICAL' ? 'opacity-50 scale-95' : ''}`}>
-            <div className="mb-2 w-48 flex items-center gap-2">
-              <AlertTriangle size={16} className={attackProgress > 80 ? 'text-red-500 animate-pulse' : 'text-slate-400'} />
-              <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
-                <div className={`h-full transition-all duration-100 ${attackProgress > 80 ? 'bg-red-500' : 'bg-yellow-500'}`} style={{ width: `${attackProgress}%` }}></div>
-              </div>
+          
+          {/* 1. モンスター名を画像の上に配置 */}
+          <div className="mb-4 text-center">
+            <div className="font-bold text-xl text-slate-800 bg-white/50 px-4 py-1 rounded-full border border-slate-200 shadow-sm">
+              {enemy.name}
+            </div>
+          </div>
+
+          {/* 2. モンスター画像エリア (背景・枠なし) */}
+          <div className="relative flex flex-col items-center justify-center min-h-[250px]">
+            {enemy.imageId ? (
+              <img 
+                src={`/monsters/${enemy.imageId}`} 
+                alt={enemy.name}
+                className={`object-contain transition-transform ${enemy.isBoss ? 'animate-bounce-slow' : ''}`}
+                style={{ 
+                  imageRendering: 'pixelated',
+                  width: `${MONSTER_DATA[enemy.type]?.displaySize || 128}px`,
+                  height: `${MONSTER_DATA[enemy.type]?.displaySize || 128}px`
+                }}
+              />
+            ) : (
+              <div className="w-32 h-32 p-2"><MonsterIll /></div>
+            )}
+            
+            {/* 3. HPゲージを画像のすぐ下に配置 */}
+            <div className="mt-4 w-48 h-3 bg-slate-200 rounded-full border border-slate-300 overflow-hidden shadow-sm relative">
+              <div className="bg-red-500 h-full transition-all duration-200" style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} />
             </div>
 
-            <div className="relative">
-              <div className={`w-32 h-32 ${enemy.isBoss ? 'bg-red-100 border-red-500' : 'bg-purple-100 border-purple-500'} rounded-xl border-4 flex items-center justify-center shadow-lg transition-all overflow-hidden`}>
-                {enemy.imageId ? (
-                  <img 
-                    src={`/monsters/${enemy.imageId}`} 
-                    alt={enemy.name}
-                    className={`w-full h-full object-contain p-2 ${enemy.isBoss ? 'scale-125' : ''}`}
-                    style={{ imageRendering: 'pixelated' }} // ドット絵をくっきり表示
-                  />
-                ) : (
-                  // 画像がない場合のフォールバック（以前のSVGなど）
-                  <div className="w-full h-full p-2"><MonsterIll /></div>
-                )}
-              </div>
-              <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-40 bg-slate-200 h-4 rounded-full border border-slate-300 overflow-hidden">
-                <div className="bg-red-500 h-full transition-all duration-200" style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} />
+            {/* 4. タイピングワードをHPゲージの下に配置 */}
+            <div className="mt-6 bg-white/90 backdrop-blur px-8 py-4 rounded-2xl border-2 border-blue-100 min-w-[240px] shadow-xl text-center">
+              <div className="text-sm text-slate-400 mb-1 font-bold">{enemy.word.display}</div>
+              <div className="text-4xl font-mono font-bold tracking-widest">
+                <span className="text-blue-600">{typed}</span>
+                <span className="text-slate-300">{enemy.word.romaji.substring(typed.length)}</span>
               </div>
             </div>
-            
-            <div className="mt-6 text-center">
-              <div className="font-bold text-lg text-slate-800">{enemy.name}</div>
-              <div className="mt-4 bg-white/80 backdrop-blur px-6 py-3 rounded-xl border border-slate-200 min-w-[200px] shadow-sm">
-                <div className="text-sm text-slate-500 mb-1">{enemy.word.display}</div>
-                <div className="text-3xl font-mono font-bold tracking-widest">
-                  <span className="text-blue-600">{typed}</span>
-                  <span className="text-slate-300">{enemy.word.romaji.substring(typed.length)}</span>
-                </div>
-              </div>
+          </div>
+
+          {/* 攻撃予告ゲージ (任意: 必要であれば画像の上に移動、不要なら削除) */}
+          <div className="mt-4 w-40 flex items-center gap-2 opacity-60">
+            <AlertTriangle size={14} className={attackProgress > 80 ? 'text-red-500 animate-pulse' : 'text-slate-400'} />
+            <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
+              <div className={`h-full transition-all duration-100 ${attackProgress > 80 ? 'bg-red-500' : 'bg-yellow-500'}`} style={{ width: `${attackProgress}%` }}></div>
             </div>
-            {animEffect === 'ATTACK' && <div className="absolute top-10 left-10 text-6xl font-black text-yellow-500 italic animate-bounce pointer-events-none z-20 drop-shadow-md">SLASH!</div>}
-            {animEffect === 'CRITICAL' && <div className="absolute top-10 left-10 text-6xl font-black text-red-600 italic animate-bounce pointer-events-none z-20 drop-shadow-md">CRITICAL!</div>}
-            {animEffect === 'MISS_ATTACK' && <div className="absolute top-10 left-10 text-4xl font-black text-slate-400 italic animate-pulse pointer-events-none z-20">MISS...</div>}
-            {animEffect === 'MISS' && <div className="absolute top-0 right-0 text-red-500 font-bold animate-ping">TYPE MISS!</div>}
+          </div>
+
+          {/* アニメーションエフェクト */}
+          {animEffect === 'ATTACK' && <div className="absolute top-1/2 text-6xl font-black text-yellow-500 italic animate-bounce pointer-events-none z-20 drop-shadow-md">SLASH!</div>}
+          {animEffect === 'CRITICAL' && <div className="absolute top-1/2 text-6xl font-black text-red-600 italic animate-bounce pointer-events-none z-20 drop-shadow-md">CRITICAL!</div>}
         </div>
       </div>
 
