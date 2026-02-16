@@ -32,8 +32,14 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
     const newRoomId = generateId().substring(0, 6).toUpperCase();
     const roomRef = doc(db, 'artifacts', GAME_APP_ID, 'rooms', newRoomId);
     
-    const wordList = WORD_LISTS[difficulty];
-    const p1Word = wordList[Math.floor(Math.random() * wordList.length)];
+    // difficulty が未定義、あるいは WORD_LISTS に存在しないキーの場合は 'NORMAL' を使用する
+    const currentDifficulty = difficulty && WORD_LISTS[difficulty] ? difficulty : 'NORMAL';
+    const wordList = WORD_LISTS[currentDifficulty];
+
+    // 万が一 wordList 自体が取得できなかった場合の安全策
+    const p1Word = (wordList && wordList.length > 0) 
+      ? wordList[Math.floor(Math.random() * wordList.length)]
+      : { display: 'Ready', romaji: 'ready' };
 
     // ★修正: ゲスト対戦(ロビー)はHP100固定
     const FIXED_HP = 100;
@@ -90,10 +96,21 @@ const LobbyScreen = ({ player, userId, onJoinRoom, onBack, difficulty }) => {
         return;
       }
 
-      const wordList = WORD_LISTS[data.difficulty || 'NORMAL'];
-      const p2Word = wordList[Math.floor(Math.random() * wordList.length)];
+      // --- 【修正箇所】 安全な単語取得ロジック ---
+      // 1. ルームの難易度を取得。WORD_LISTSにない場合は 'NORMAL' をフォールバック
+      const roomDiff = (data.difficulty && WORD_LISTS[data.difficulty]) ? data.difficulty : 'NORMAL';
+      const wordList = WORD_LISTS[roomDiff];
 
-      // ★修正: ゲスト対戦(ロビー)はHP100固定
+      // 2. リストが存在し、かつ空でないかを確認。ダメな場合はデフォルト単語を用意
+      let p2Word;
+      if (wordList && wordList.length > 0) {
+        p2Word = wordList[Math.floor(Math.random() * wordList.length)];
+      } else {
+        // データがまだロードされていない、あるいは空の場合の安全策
+        p2Word = { display: 'Ready', romaji: 'ready' };
+      }
+      // --- 【修正箇所ここまで】 ---
+
       const FIXED_HP = 100;
 
       const player2Data = {

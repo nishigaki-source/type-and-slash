@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react'; // useRef を追加
 import { onAuthStateChanged, signOut, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { setMonsterData } from './constants/monsters';
@@ -41,10 +41,71 @@ export default function TypingGame() {
   const [shopItems, setShopItems] = useState([]);
   const [difficulty, setDifficulty] = useState('EASY'); // デフォルト難易度
   const [dataLoaded, setDataLoaded] = useState(false); // 追加：CSV読み込み完了フラグ
+  const [isMuted, setIsMuted] = useState(false); // ミュート状態を管理
   
   const [fbUser, setFbUser] = useState(null);
   const [isGuest, setIsGuest] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+
+  const bgmRef = useRef(null);
+  const townBgmRef = useRef(null);
+
+ useEffect(() => {
+    // 1. Audioオブジェクトの初期化 (未作成の場合のみ)
+    if (!bgmRef.current) {
+      bgmRef.current = new Audio('/sounds/title_bgm.mp3');
+      bgmRef.current.loop = true;
+      bgmRef.current.volume = 0.5;
+    }
+    if (!townBgmRef.current) {
+      townBgmRef.current = new Audio('/sounds/town_bgm.mp3');
+      townBgmRef.current.loop = true;
+      townBgmRef.current.volume = 0.4;
+    }
+
+    // --- 音量・ミュート状態の同期 ---
+    if (bgmRef.current) bgmRef.current.muted = isMuted;
+    if (townBgmRef.current) townBgmRef.current.muted = isMuted;
+
+    // 判定用変数の定義（宣言はここ1回のみ）
+    const isMainTitleActive = gameState === 'TITLE' || showAuth;
+    const isTownActive = gameState === 'TOWN';
+
+    // ユーザー操作で再生を開始するための共通関数
+    const handleUserInteraction = () => {
+      if (isMainTitleActive && bgmRef.current) {
+        bgmRef.current.play().catch(() => {});
+      } else if (isTownActive && townBgmRef.current) {
+        townBgmRef.current.play().catch(() => {});
+      }
+      window.removeEventListener('click', handleUserInteraction);
+    };
+
+    // --- 排他的な再生ロジック ---
+    if (isMainTitleActive) {
+      // タウンBGMを止めてタイトルBGMを再生
+      if (townBgmRef.current) townBgmRef.current.pause();
+      bgmRef.current.play().catch(() => {
+        // 自動再生がブロックされた場合のみクリックを待つ
+        window.addEventListener('click', handleUserInteraction);
+      });
+    } else if (isTownActive) {
+      // タイトルBGMを止めてタウンBGMを再生
+      if (bgmRef.current) bgmRef.current.pause();
+      townBgmRef.current.play().catch(() => {
+        window.addEventListener('click', handleUserInteraction);
+      });
+    } else {
+      // バトル画面など、それ以外の画面では両方止める
+      if (bgmRef.current) bgmRef.current.pause();
+      if (townBgmRef.current) townBgmRef.current.pause();
+    }
+
+    // クリーンアップ
+    return () => {
+      window.removeEventListener('click', handleUserInteraction);
+    };
+  }, [gameState, showAuth, isMuted]); // 必要な依存関係をすべて含める
 
   // 宝箱選択用のState
   const [treasureChests, setTreasureChests] = useState([]);
@@ -137,18 +198,27 @@ export default function TypingGame() {
   }, [gameState, player, shopItems.length, refreshShop]);
 
   const handleCreateChar = (formData) => {
-    const initialStats = calcInitialStats(formData.job, formData.race, formData.personality);
-    const newPlayer = {
-      id: fbUser?.uid,
-      name: formData.name, job: formData.job, race: formData.race, gender: formData.gender, personality: formData.personality,
-      level: 1, exp: 0, gold: 500, maxStage: 1, stats: initialStats,
-      arenaPoints: 0,
-      records: { 
-        totalTypes: 0, totalMiss: 0, dungeonClears: 0, 
-        arenaChallenges: 0, 
-        missedWords: {}, missedKeys: {}, daily: {} 
-      }
-    };
+  // personality を除外して初期ステータス計算
+  const initialStats = calcInitialStats(formData.job, formData.race, null); 
+  const newPlayer = {
+    id: fbUser?.uid,
+    name: formData.name, 
+    job: formData.job, 
+    race: formData.race, 
+    gender: formData.gender,
+    // personality を削除
+    level: 1, 
+    exp: 0, 
+    gold: 500, 
+    maxStage: 1, 
+    stats: initialStats,
+    arenaPoints: 0,
+    records: { 
+      totalTypes: 0, totalMiss: 0, dungeonClears: 0, 
+      arenaChallenges: 0, 
+      missedWords: {}, missedKeys: {}, daily: {} 
+    }
+  };
     const initialWeapon = generateItem(1, formData.job);
     initialWeapon.type = 'WEAPON';
     initialWeapon.name = '初心者の' + (JOBS[formData.job].weapon);
@@ -262,6 +332,34 @@ export default function TypingGame() {
       }
     };
     fetchMonsters();
+  }, []);
+
+  const [charGachaData, setCharGachaData] = useState([]);
+
+  useEffect(() => {
+    const fetchCharGacha = async () => {
+      const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSX390LCOBUeNUoNT470sNNpvpRe3IcN32-Nx3xmp86xcy44YzaDnnBgM4cM2XMUcXLHOLokfAObT3c/pub?gid=2090543331&single=true&output=csv";
+      try {
+        const response = await fetch(CSV_URL);
+        const csvText = await response.text();
+        const rows = csvText.split(/\r?\n/).filter(row => row.trim() !== "").slice(1);
+        const data = rows.map(row => {
+          const cols = row.split(',');
+          return {
+            key: cols[0], name: cols[1], race: cols[2], gender: cols[3], job: cols[4],
+            rarity: cols[5], stats: {
+              hp: parseInt(cols[6]), str: parseInt(cols[7]), vit: parseInt(cols[8]),
+              dex: parseInt(cols[9]), agi: parseInt(cols[10]), luk: parseInt(cols[11])
+            },
+            chance: parseFloat(cols[13]), imageId: cols[14]
+          };
+        });
+        setCharGachaData(data);
+      } catch (e) {
+        console.error("キャラクターガチャデータのロード失敗:", e);
+      }
+    };
+    fetchCharGacha();
   }, []);
 
   const startBattle = (stage) => {
@@ -683,6 +781,27 @@ export default function TypingGame() {
           onFinish={handleMultiFinish} 
         />
       )}
+
+      {/* --- 全画面共通：画面右端のミュートボタン --- */}
+      <div className="fixed right-4 bottom-4 z-[100] flex flex-col gap-2">
+        <button
+          onClick={() => setIsMuted(!isMuted)}
+          className={`p-3 rounded-full shadow-2xl border-2 transition-all active:scale-90 flex items-center justify-center ${
+            isMuted 
+            ? 'bg-red-500 border-red-400 text-white' 
+            : 'bg-white/80 border-slate-200 text-slate-600 hover:bg-white backdrop-blur-sm'
+          }`}
+          title={isMuted ? "音声を出す" : "ミュートにする"}
+        >
+          {isMuted ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          )}
+        </button>
+      </div>
+
+      {/* 既存のResultModal等 */}
 
       {gameState === 'RESULT' && <ResultModal message={modalMessage} onTown={() => { setModalMessage(null); setGameState('TOWN'); }} />}
     </div>
