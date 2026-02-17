@@ -24,7 +24,6 @@ import AuthScreen from './components/screens/AuthScreen';
 import TitleScreen from './components/screens/TitleScreen';
 import CharCreateScreen from './components/screens/CharCreateScreen';
 import TownScreen from './components/screens/TownScreen';
-import ClassChangeScreen from './components/screens/ClassChangeScreen';
 import BattleScreen from './components/screens/BattleScreen';
 import ResultModal from './components/ui/ResultModal';
 import TreasureSelectionModal from './components/ui/TreasureSelectionModal';
@@ -197,45 +196,58 @@ export default function TypingGame() {
      if(gameState === 'TOWN' && shopItems.length === 0 && player) refreshShop();
   }, [gameState, player, shopItems.length, refreshShop]);
 
-  const handleCreateChar = (formData) => {
-  // personality を除外して初期ステータス計算
-  const initialStats = calcInitialStats(formData.job, formData.race, null); 
+  // src/Game.jsx 内の handleCreateChar を修正
+const handleCreateChar = (formData) => {
+  // 性格を廃止した新しい計算式
+  const initialStats = calcInitialStats(formData.job, formData.race); 
+  
+  // 初期キャラクターオブジェクトの作成
+  const firstChar = {
+    id: generateId(), // キャラクター固有のID
+    name: formData.name, 
+    job: formData.job, 
+    race: formData.race, 
+    gender: formData.gender,
+    stats: { ...initialStats } // このキャラクターの基礎ステータス
+  };
+
   const newPlayer = {
     id: fbUser?.uid,
     name: formData.name, 
     job: formData.job, 
     race: formData.race, 
     gender: formData.gender,
-    // personality を削除
     level: 1, 
     exp: 0, 
     gold: 500, 
     maxStage: 1, 
-    stats: initialStats,
+    stats: { ...initialStats }, // 現在適用されている基礎ステータス
+    characters: [firstChar],    // ★所持キャラクターリストに追加
     arenaPoints: 0,
     records: { 
       totalTypes: 0, totalMiss: 0, dungeonClears: 0, 
       arenaChallenges: 0, 
-      missedWords: {}, missedKeys: {}, daily: {} 
+      missedWords: {}, missedKeys: {}, daily: {},
+      levelGains: { hp: 0, str: 0, vit: 0, dex: 0, agi: 0, luk: 0 } // ★累積上昇値
     }
   };
-    const initialWeapon = generateItem(1, formData.job);
-    initialWeapon.type = 'WEAPON';
-    initialWeapon.name = '初心者の' + (JOBS[formData.job].weapon);
-    initialWeapon.jobReq = [formData.job];
-    // ★画像ファイル名を設定
-    initialWeapon.imageId = 'beginner_sword.png'; 
-    
-    const initialPotions = [
-      generateConsumable(), generateConsumable(), generateConsumable()
-    ].map(p => ({ ...p, consumableId: 'POTION_S', name: 'ポーション' }));
 
-    setPlayer(newPlayer);
-    setInventory([initialWeapon, ...initialPotions]);
-    setEquipped(prev => ({ ...prev, WEAPON: initialWeapon }));
-    
-    setGameState('TOWN');
-  };
+  // 初心者装備の生成
+  const initialWeapon = generateItem(1, formData.job);
+  initialWeapon.type = 'WEAPON';
+  initialWeapon.name = '初心者の' + (JOBS[formData.job].weapon);
+  initialWeapon.jobReq = [formData.job];
+  initialWeapon.imageId = 'beginner_sword.png'; 
+
+  const initialPotions = [
+    generateConsumable(), generateConsumable(), generateConsumable()
+  ].map(p => ({ ...p, consumableId: 'POTION_S', name: 'ポーション' }));
+
+  setPlayer(newPlayer);
+  setInventory([initialWeapon, ...initialPotions]);
+  setEquipped(prev => ({ ...prev, WEAPON: initialWeapon }));
+  setGameState('TOWN');
+};
   
   // --- 出題ワードのデータ読み込み処理を追加 ---
   const [floorWords, setFloorWords] = useState({ EASY: {}, NORMAL: {}, HARD: {} });
@@ -342,19 +354,39 @@ export default function TypingGame() {
       try {
         const response = await fetch(CSV_URL);
         const csvText = await response.text();
+        
+        // 空行を除去して行ごとに分割
         const rows = csvText.split(/\r?\n/).filter(row => row.trim() !== "").slice(1);
-        const data = rows.map(row => {
-          const cols = row.split(',');
+        
+        const loadedData = rows.map(row => {
+          // カンマ区切りの安全な分割
+          const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+          const clean = (val) => val?.replace(/^"|"$/g, '').trim() || "";
+
           return {
-            key: cols[0], name: cols[1], race: cols[2], gender: cols[3], job: cols[4],
-            rarity: cols[5], stats: {
-              hp: parseInt(cols[6]), str: parseInt(cols[7]), vit: parseInt(cols[8]),
-              dex: parseInt(cols[9]), agi: parseInt(cols[10]), luk: parseInt(cols[11])
+            id: clean(cols[0]),
+            name: clean(cols[1]),
+            race: clean(cols[2]),
+            gender: clean(cols[3]),
+            job: clean(cols[4]),
+            rarity: clean(cols[5]) || 'N', // F列: レアリティ
+            stats: {
+              hp: parseInt(clean(cols[6])) || 10,
+              str: parseInt(clean(cols[7])) || 5,
+              vit: parseInt(clean(cols[8])) || 5,
+              dex: parseInt(clean(cols[9])) || 5,
+              agi: parseInt(clean(cols[10])) || 5,
+              luk: parseInt(clean(cols[11])) || 5
             },
-            chance: parseFloat(cols[13]), imageId: cols[14]
+            chance: parseFloat(clean(cols[13])) || 0,
+            imageId: clean(cols[14])
           };
         });
-        setCharGachaData(data);
+
+        console.log("読み込み成功:", loadedData);
+        // 変数名を loadedData に統一してセット
+        setCharGachaData(loadedData);
+        
       } catch (e) {
         console.error("キャラクターガチャデータのロード失敗:", e);
       }
@@ -426,14 +458,24 @@ export default function TypingGame() {
   setGameState('BATTLE');
 };
 
+  // src/Game.jsx 445行目付近
+
   const handleGuestStart = async () => {
      try {
        // 未ログインなら匿名ログイン
        if (!auth.currentUser) {
          await signInAnonymously(auth);
        }
+       
+       // --- ステートの完全初期化を追加 ---
        setIsGuest(true);
        setPlayer(null); 
+       setInventory([]); // インベントリを空にする
+       setEquipped({ HEAD: null, BODY: null, FEET: null, ACCESSORY: null, WEAPON: null }); // 装備を解除
+       setShopItems([]); // ショップをリセット（直後のuseEffectで新規生成されます）
+       setDifficulty('EASY'); // 難易度を初期値へ
+       // ------------------------------
+
        setShowAuth(false);
        setGameState('CHAR_CREATE'); 
      } catch (e) {
@@ -470,23 +512,6 @@ export default function TypingGame() {
       console.error("Guest Multiplayer Error:", e);
       alert("通信エラーが発生しました");
     }
-  };
-  
-  const handleChangeClass = (newJobId, cost) => {
-    if (!player) return;
-    const newGold = player.gold - cost;
-    const newEquipped = { ...equipped, WEAPON: null };
-    let newStats = calcInitialStats(newJobId, player.race, player.personality);
-    const levelsToGrow = player.level - 1;
-    if (levelsToGrow > 0) {
-      const growthResult = growStats(newStats, newJobId, levelsToGrow);
-      newStats = growthResult.newStats;
-    }
-    const newPlayer = { ...player, job: newJobId, gold: newGold, stats: newStats };
-    setPlayer(newPlayer);
-    setEquipped(newEquipped);
-    setGameState('TOWN');
-    alert(`${JOBS[newJobId].name} に転職しました！\nステータスが再計算されました。`);
   };
 
   const handleEquip = (item) => {
@@ -718,16 +743,14 @@ export default function TypingGame() {
           onUnequip={handleUnequip} 
           onStartBattle={startBattle} 
           onLogout={handleLogout} 
-          onClassChange={() => setGameState('CLASS_CHANGE')} 
           difficulty={difficulty} 
-          setDifficulty={setDifficulty} // ★追加: 難易度変更用
+          setDifficulty={setDifficulty} 
           onStartArena={handleStartArena} 
           isGuest={isGuest} 
+          charGachaData={charGachaData}
         />
       }
-      
-      {gameState === 'CLASS_CHANGE' && player && <ClassChangeScreen player={player} onChangeClass={handleChangeClass} onBack={() => setGameState('TOWN')} />}
-      
+    
       {gameState === 'BATTLE' && battleState && player && 
         <BattleScreen 
           battleState={battleState} 

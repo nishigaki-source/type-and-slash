@@ -1,4 +1,4 @@
-import { CONSUMABLES, ITEM_TYPES, RARITY, JOBS, RACES, PERSONALITIES, GROWTH, ARENA_RANKS, RACE_ADVANTAGES, JOB_ADVANTAGES, TREASURE_CHESTS } from '../constants/data';
+import { CONSUMABLES, ITEM_TYPES, RARITY, JOBS, RACES, PERSONALITIES, GROWTH, ARENA_RANKS, RACE_ADVANTAGES, JOB_ADVANTAGES, TREASURE_CHESTS } from "/src/constants/data.jsx";
 
 export const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -201,13 +201,11 @@ export const openTreasureChest = (chestType, playerLevel, jobType) => {
 export const calcInitialStats = (jobId, raceId, persId) => {
   const job = JOBS[jobId];
   const race = RACES[raceId];
-  const pers = PERSONALITIES[persId];
 
   const calcStat = (statName) => {
     let val = getRandomInt(5, 10);
     val += (job.initMod[statName] || 0);
     val += (race.mod[statName] || 0);
-    if (pers.bonusStat === statName) val += 1;
     return Math.max(5, Math.min(10, val));
   };
 
@@ -237,8 +235,18 @@ export const growStats = (currentStats, jobId, levelsToGrow = 1) => {
 export const calculateEffectiveStats = (player, equipped, buffs = {}) => {
   if (!player) return null;
 
+  // 1. キャラクターの基礎ステータス (ガチャで決定された値)
   let s = { ...player.stats };
   
+  // 2. ユーザーレベルによる累積上昇値 (records.levelGains) を加算
+  // records.levelGains が存在しない場合（初期状態）は 0 として扱う
+  const levelGains = player.records?.levelGains || { hp: 0, str: 0, vit: 0, dex: 0, agi: 0, luk: 0 };
+  
+  Object.keys(s).forEach(key => {
+    s[key] += (levelGains[key] || 0);
+  });
+
+  // 3. バフの加算
   if (buffs) {
     s.str += (buffs.str || 0);
     s.vit += (buffs.vit || 0);
@@ -246,6 +254,7 @@ export const calculateEffectiveStats = (player, equipped, buffs = {}) => {
     s.dex += (buffs.dex || 0);
   }
   
+  // 4. 装備品による増減
   let equipStats = { atk: 0, def: 0, wt: 0 };
   Object.values(equipped).forEach(item => {
     if (item) {
@@ -255,6 +264,7 @@ export const calculateEffectiveStats = (player, equipped, buffs = {}) => {
     }
   });
 
+  // --- 最終計算ロジック (ここからは既存の計算式を維持) ---
   const maxHp = s.hp + (s.vit * 2);
   const totalAtk = s.str + equipStats.atk;
   const totalDef = s.vit + equipStats.def;
@@ -267,7 +277,9 @@ export const calculateEffectiveStats = (player, equipped, buffs = {}) => {
   const critRate = Math.min(50, Math.max(1, s.luk * 0.5));
 
   return {
-    base: s,
+    base: player.stats,      // キャラクター本来の基礎値
+    levelBonus: levelGains,  // レベルによる上昇分
+    currentTotal: s,         // 基礎+レベル+バフの合計
     equip: equipStats,
     battle: {
       maxHp,

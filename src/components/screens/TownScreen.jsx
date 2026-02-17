@@ -24,9 +24,10 @@ import SettingsView from './town/SettingsView';
 const TownScreen = ({ 
   player, inventory, equipped, 
   shopItems, setShopItems, setPlayer, setInventory,
-  onEquip, onUnequip, onStartBattle, onLogout, onClassChange, difficulty, setDifficulty, // ★setDifficulty追加
+  onEquip, onUnequip, onStartBattle, onLogout, difficulty, setDifficulty,
   onStartArena,
-  isGuest
+  isGuest,
+  charGachaData // ★ここに charGachaData を追加
 }) => {
   const [activeView, setActiveView] = useState('HOME');
   const [selectedStage, setSelectedStage] = useState(1);
@@ -102,7 +103,7 @@ const TownScreen = ({
   const renderContent = () => {
     switch(activeView) {
       case 'HOME': return <HomeView player={player} difficulty={difficulty} onMoveToDungeon={handleGoToDungeon} />;
-      case 'STATUS': return <StatusView player={player} equipped={equipped} onClassChange={onClassChange} />;
+      case 'STATUS': return <StatusView player={player} setPlayer={setPlayer} equipped={equipped} charGachaData={charGachaData} />;
       case 'SHOP': return <ShopView player={player} inventory={inventory} equipped={equipped} shopItems={shopItems} setShopItems={setShopItems} setPlayer={setPlayer} setInventory={setInventory} />;
       case 'TRADE':
         if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
@@ -111,10 +112,22 @@ const TownScreen = ({
       case 'ITEM':
         return <InventoryView player={player} inventory={inventory} equipped={equipped} onEquip={onEquip} onUnequip={onUnequip} toggleLock={toggleLock} setPlayer={setPlayer} setInventory={setInventory} />;
       case 'ACHIEVEMENT': return <DashboardView player={player} />;
+      // src/components/screens/TownScreen.jsx 117行目付近
+
       case 'ARENA': 
         if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
         return <ArenaView player={player} equipped={equipped} userId={player.id || 'guest'} onStartMatch={onStartArena} />;
-      case 'GACHA': return <GachaView player={player} setPlayer={setPlayer} setInventory={setInventory} />;
+      
+      case 'GACHA': 
+        return (
+          <GachaView 
+            player={player} 
+            setPlayer={setPlayer} 
+            setInventory={setInventory} 
+            charGachaData={charGachaData} 
+          />
+        );
+
       case 'QUEST': return <PlaceholderView title="クエスト" icon={<FileText size={48}/>} />;
       case 'FRIEND':
         if (isGuest) return <HomeView player={player} difficulty={difficulty} />;

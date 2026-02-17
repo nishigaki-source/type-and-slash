@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Gift, Coins, Sparkles, UserPlus, Loader2 } from 'lucide-react'; // Loader2を追加
-import { generateItem } from '../../../utils/gameLogic';
+import { Gift, Coins, Sparkles, UserPlus, Loader2 } from 'lucide-react';
+// generateId を追加
+import { generateItem, generateId } from '../../../utils/gameLogic';
 import { ItemIcon } from './ItemIcon';
 import { RARITY } from '../../../constants/data';
 
@@ -21,7 +22,7 @@ const GachaView = ({ player, setPlayer, setInventory, charGachaData = [] }) => {
     // データのロードチェック
     if (!charGachaData || charGachaData.length === 0) {
       alert('キャラクターデータを読み込み中です。しばらくお待ちください。');
-      return;
+      return null;
     }
     
     const rand = Math.random();
@@ -29,7 +30,6 @@ const GachaView = ({ player, setPlayer, setInventory, charGachaData = [] }) => {
     let selectedChar = charGachaData[charGachaData.length - 1];
 
     for (const char of charGachaData) {
-      // 確率(chance)を確実に数値として扱う
       const chance = parseFloat(char.chance) || 0;
       cumulative += chance;
       if (rand < cumulative) {
@@ -38,17 +38,20 @@ const GachaView = ({ player, setPlayer, setInventory, charGachaData = [] }) => {
       }
     }
 
+    const newCharObj = {
+      id: generateId(),
+      name: selectedChar.name,
+      job: selectedChar.job,
+      race: selectedChar.race,
+      gender: selectedChar.gender,
+      stats: { ...selectedChar.stats },
+      imageId: selectedChar.imageId // 画像IDも保持
+    };
+
     // 結果をセット（表示用）
     setResult({ type: 'CHAR', data: selectedChar }); 
 
-    // プレイヤーへのステータス反映
-    setPlayer(prev => ({
-      ...prev,
-      race: selectedChar.race,
-      gender: selectedChar.gender,
-      job: selectedChar.job,
-      stats: { ...selectedChar.stats }
-    }));
+    return newCharObj;
   };
 
   const handleGacha = () => {
@@ -60,15 +63,80 @@ const GachaView = ({ player, setPlayer, setInventory, charGachaData = [] }) => {
     setResult(null);
 
     setTimeout(() => {
-      setPlayer(prev => ({ ...prev, gold: prev.gold - GACHA_COST }));
+      const nextGold = player.gold - GACHA_COST;
+
       if (activeTab === 'EQUIP') {
         handleEquipGacha();
+        setPlayer(prev => ({ ...prev, gold: nextGold }));
       } else {
-        handleCharGacha();
+        // --- キャラクターガチャ抽選 ---
+        const rand = Math.random();
+        let cumulative = 0;
+        let selectedChar = charGachaData[charGachaData.length - 1];
+
+        for (const char of charGachaData) {
+          const chance = parseFloat(char.chance) || 0;
+          cumulative += chance;
+          if (rand < cumulative) {
+            selectedChar = char;
+            break;
+          }
+        }
+
+        setResult({ type: 'CHAR', data: selectedChar });
+
+        setPlayer(prev => {
+          const currentChars = prev.characters || [];
+          // 同一キャラの判定（名前・職業・種族・性別が一致するか）
+          const existingIndex = currentChars.findIndex(c => 
+            c.name === selectedChar.name && 
+            c.job === selectedChar.job && 
+            c.race === selectedChar.race && 
+            c.gender === selectedChar.gender
+          );
+
+          let updatedCharacters;
+          if (existingIndex > -1) {
+            // --- マージ処理 ---
+            updatedCharacters = [...currentChars];
+            const target = { ...updatedCharacters[existingIndex] };
+            
+            // マージ回数（plusCount）を増やす
+            target.plusCount = (target.plusCount || 0) + 1;
+            
+            // 全ステータスを+1（基礎ステータスを直接強化）
+            const newStats = { ...target.stats };
+            Object.keys(newStats).forEach(key => {
+              newStats[key] += 1;
+            });
+            target.stats = newStats;
+
+            updatedCharacters[existingIndex] = target;
+          } else {
+            // --- 新規追加 ---
+            const newCharObj = {
+              id: generateId(),
+              name: selectedChar.name,
+              job: selectedChar.job,
+              race: selectedChar.race,
+              gender: selectedChar.gender,
+              stats: { ...selectedChar.stats },
+              imageId: selectedChar.imageId,
+              plusCount: 0 // 初期値は0
+            };
+            updatedCharacters = [...currentChars, newCharObj];
+          }
+
+          return {
+            ...prev,
+            gold: nextGold,
+            characters: updatedCharacters
+          };
+        });
       }
       setIsAnimating(false);
     }, 1000);
-  };
+  }; 
 
   return (
     <div className="h-full flex flex-col bg-white/90 backdrop-blur-md animate-fade-in relative">
@@ -121,21 +189,22 @@ const GachaView = ({ player, setPlayer, setInventory, charGachaData = [] }) => {
                   src={`/character/${result.data.imageId}`} 
                   alt={result.data.name} 
                   className="w-full h-full object-contain"
-                  onError={(e) => { e.target.src = '/character/fallback.png'; }} // 万が一画像がない場合
+                  onError={(e) => { e.target.src = '/character/fallback.png'; }} 
                 />
               </div>
             )}
 
             <div className={`text-xl font-bold mb-1 ${result.type === 'ITEM' ? RARITY[result.data.rarity.toUpperCase()]?.color : 'text-blue-700'}`}>
-              {result.data.name}
-            </div>
-            
-            {result.type === 'CHAR' && (
-              <div className="text-xs text-slate-500 mb-4 font-bold uppercase tracking-widest">
-                {result.data.race} / {result.data.job}
-              </div>
-            )}
-            
+            {result.data.name}
+            {/* キャラクターかつ重複マージだった場合に +X を表示 */}
+            {result.type === 'CHAR' && (() => {
+              const charInInventory = player.characters?.find(c => 
+                c.name === result.data.name && c.job === result.data.job
+              );
+              return charInInventory?.plusCount > 0 ? ` +${charInInventory.plusCount}` : '';
+            })()}
+          </div>
+
             <button 
               onClick={() => setResult(null)} 
               className="w-full bg-slate-800 text-white py-3 rounded-lg font-bold text-sm hover:bg-slate-700 transition-colors"
