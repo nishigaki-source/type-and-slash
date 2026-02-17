@@ -20,15 +20,12 @@ const AuthScreen = ({ onLogin, onGuest, onBack }) => {
     setLoading(true);
     try {
       if (isResetting) {
-        // パスワード再設定メール送信
         await sendPasswordResetEmail(auth, email);
         setMessage('パスワード再設定メールを送信しました。メールを確認してください。');
       } else if (isRegistering) {
-        // 新規登録
         await createUserWithEmailAndPassword(auth, email, password);
         onLogin();
       } else {
-        // ログイン
         await signInWithEmailAndPassword(auth, email, password);
         onLogin();
       }
@@ -46,7 +43,6 @@ const AuthScreen = ({ onLogin, onGuest, onBack }) => {
     }
   };
 
-  // 画面表示切り替え
   const toggleMode = (mode) => {
     setError(null);
     setMessage(null);
@@ -63,11 +59,16 @@ const AuthScreen = ({ onLogin, onGuest, onBack }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full bg-slate-50 text-slate-800 animate-fade-in relative px-4">
-      <SVGs.TownBg />
-      <div className="absolute inset-0 bg-white/40 z-0 backdrop-blur-sm"></div>
+    /* 1. 背景画像を設定する一番外側の親タグ */
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center relative"
+      style={{ backgroundImage: "url('/backgrounds/guild_bg.png')" }}
+    >
+      {/* 2. 背景を少し暗くして文字を読みやすくするオーバーレイ */}
+      <div className="absolute inset-0 bg-black/40 z-0"></div>
       
-      <div className="relative z-10 w-full max-w-md bg-white p-8 rounded-xl shadow-2xl border border-slate-200">
+      {/* 3. 実際のコンテンツ（白いカード部分） */}
+      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-sm p-8 rounded-xl shadow-2xl border border-slate-200">
         <h2 className="text-3xl font-bold mb-6 text-center text-yellow-600 drop-shadow-sm flex items-center justify-center gap-2">
           {isResetting ? <KeyRound /> : (isRegistering ? <UserPlus /> : <LogIn />)}
           {isResetting ? 'パスワード再設定' : (isRegistering ? '新規冒険者登録' : 'ギルドログイン')}

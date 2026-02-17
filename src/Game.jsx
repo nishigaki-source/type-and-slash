@@ -38,9 +38,9 @@ export default function TypingGame() {
   const [equipped, setEquipped] = useState({ HEAD: null, BODY: null, FEET: null, ACCESSORY: null, WEAPON: null });
   const [modalMessage, setModalMessage] = useState(null);
   const [shopItems, setShopItems] = useState([]);
-  const [difficulty, setDifficulty] = useState('EASY'); // デフォルト難易度
-  const [dataLoaded, setDataLoaded] = useState(false); // 追加：CSV読み込み完了フラグ
-  const [isMuted, setIsMuted] = useState(false); // ミュート状態を管理
+  const [difficulty, setDifficulty] = useState('EASY');
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   
   const [fbUser, setFbUser] = useState(null);
   const [isGuest, setIsGuest] = useState(false);
@@ -48,9 +48,10 @@ export default function TypingGame() {
 
   const bgmRef = useRef(null);
   const townBgmRef = useRef(null);
+  const battleBgmRef = useRef(null); // ★バトル用BGMのRef
 
- useEffect(() => {
-    // 1. Audioオブジェクトの初期化 (未作成の場合のみ)
+  useEffect(() => {
+    // 1. Audioオブジェクトの初期化
     if (!bgmRef.current) {
       bgmRef.current = new Audio('/sounds/title_bgm.mp3');
       bgmRef.current.loop = true;
@@ -61,50 +62,55 @@ export default function TypingGame() {
       townBgmRef.current.loop = true;
       townBgmRef.current.volume = 0.4;
     }
-
-    // --- 音量・ミュート状態の同期 ---
-    if (bgmRef.current) bgmRef.current.muted = isMuted;
-    if (townBgmRef.current) townBgmRef.current.muted = isMuted;
-
-    // 判定用変数の定義（宣言はここ1回のみ）
-    const isMainTitleActive = gameState === 'TITLE' || showAuth;
-    const isTownActive = gameState === 'TOWN';
-
-    // ユーザー操作で再生を開始するための共通関数
-    const handleUserInteraction = () => {
-      if (isMainTitleActive && bgmRef.current) {
-        bgmRef.current.play().catch(() => {});
-      } else if (isTownActive && townBgmRef.current) {
-        townBgmRef.current.play().catch(() => {});
-      }
-      window.removeEventListener('click', handleUserInteraction);
-    };
-
-    // --- 排他的な再生ロジック ---
-    if (isMainTitleActive) {
-      // タウンBGMを止めてタイトルBGMを再生
-      if (townBgmRef.current) townBgmRef.current.pause();
-      bgmRef.current.play().catch(() => {
-        // 自動再生がブロックされた場合のみクリックを待つ
-        window.addEventListener('click', handleUserInteraction);
-      });
-    } else if (isTownActive) {
-      // タイトルBGMを止めてタウンBGMを再生
-      if (bgmRef.current) bgmRef.current.pause();
-      townBgmRef.current.play().catch(() => {
-        window.addEventListener('click', handleUserInteraction);
-      });
-    } else {
-      // バトル画面など、それ以外の画面では両方止める
-      if (bgmRef.current) bgmRef.current.pause();
-      if (townBgmRef.current) townBgmRef.current.pause();
+    if (!battleBgmRef.current) {
+      battleBgmRef.current = new Audio();
+      battleBgmRef.current.loop = true;
+      battleBgmRef.current.volume = 0.5;
     }
 
-    // クリーンアップ
+    // --- ミュート状態の同期 ---
+    bgmRef.current.muted = isMuted;
+    townBgmRef.current.muted = isMuted;
+    battleBgmRef.current.muted = isMuted;
+
+    const isMainTitleActive = gameState === 'TITLE' || showAuth;
+    const isTownActive = gameState === 'TOWN';
+    const isBattleActive = gameState === 'BATTLE';
+
+    // 排他的な再生ロジック
+    if (isMainTitleActive) {
+      if (townBgmRef.current) townBgmRef.current.pause();
+      if (battleBgmRef.current) battleBgmRef.current.pause();
+      bgmRef.current.play().catch(() => {});
+    } else if (isTownActive) {
+      if (bgmRef.current) bgmRef.current.pause();
+      if (battleBgmRef.current) battleBgmRef.current.pause();
+      townBgmRef.current.play().catch(() => {});
+    } else if (isBattleActive && battleState) {
+      if (bgmRef.current) bgmRef.current.pause();
+      if (townBgmRef.current) townBgmRef.current.pause();
+      
+      // ゾーン名に基づいてBGMパスを決定
+      let bgmPath = '/sounds/battle_normal.mp3';
+      if (battleState.zoneName === "はじまりの草原") {
+        bgmPath = '/sounds/grassland_battle.mp3';
+      }
+      
+      if (battleBgmRef.current.src !== window.location.origin + bgmPath) {
+        battleBgmRef.current.src = bgmPath;
+      }
+      battleBgmRef.current.play().catch(() => {});
+    } else {
+      if (bgmRef.current) bgmRef.current.pause();
+      if (townBgmRef.current) townBgmRef.current.pause();
+      if (battleBgmRef.current) battleBgmRef.current.pause();
+    }
+    
+    // クリーンアップ処理
     return () => {
-      window.removeEventListener('click', handleUserInteraction);
+      // 必要に応じて停止処理などを記述
     };
-  }, [gameState, showAuth, isMuted]); // 必要な依存関係をすべて含める
+  }, [gameState, showAuth, isMuted, battleState]); // 必要な依存関係をすべて含む
 
   // 宝箱選択用のState
   const [treasureChests, setTreasureChests] = useState([]);

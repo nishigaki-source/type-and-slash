@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Feather, LogOut, ArrowRight, Dices, Info } from 'lucide-react';
 import { SVGs } from '../GameSvgs';
-import { JOBS, RACES } from '../../constants/data'; // PERSONALITIESを除外
+import { JOBS, RACES } from '../../constants/data'; 
 import { generateRandomName } from '../../utils/gameLogic';
 
-// 相性図コンポーネント (レスポンシブ対応版)
+// 相性図コンポーネント (変更なし)
 const RelationDiagram = () => (
   <div className="bg-white/90 p-4 rounded-lg border-2 border-slate-300 mb-4 text-xs text-slate-600 shadow-sm">
     <h3 className="font-bold text-center mb-4 text-slate-700 flex items-center justify-center gap-2 border-b border-slate-200 pb-2">
@@ -52,26 +52,29 @@ const RelationDiagram = () => (
 );
 
 const CharCreateScreen = ({ onCreate, onBack }) => {
-  // 性格(personality)を削除
   const [form, setForm] = useState({ name: '冒険者', job: 'FIGHTER', race: 'HUMAN', gender: 'MALE' });
 
   const handleRandomName = () => {
     setForm({...form, name: generateRandomName()});
   };
 
-  // 選択に応じた画像パスを生成 (public/character/種族_性別_職業.png)
   const getCharacterImagePath = () => {
     return `/character/${form.race.toLowerCase()}_${form.gender.toLowerCase()}_${form.job.toLowerCase()}.png`;
   };
 
   return (
-    <div className="w-full h-full relative overflow-y-auto text-slate-800 bg-slate-50 font-sans">
-      <div className="fixed inset-0 opacity-10 pointer-events-none">
-         <SVGs.GuildBg />
-      </div>
-      
-      <div className="min-h-full p-4 md:p-8 flex items-start justify-center relative z-10">
-        <div className="max-w-6xl w-full bg-[#fdf6e3]/95 backdrop-blur-sm rounded shadow-2xl p-6 md:p-8 border-4 border-[#8b5cf6] my-8">
+    <div 
+      className="fixed inset-0 w-full h-full bg-cover bg-center bg-no-repeat overflow-y-auto"
+      style={{ 
+        backgroundImage: "url('/backgrounds/guild_bg.png')",
+        backgroundAttachment: 'fixed' 
+      }}
+    >
+      {/* 修正ポイント：min-h-full を使い、コンテンツが伸びても背景（黒透過）が途切れないようにする */}
+      <div className="relative min-h-full w-full bg-slate-900/60 flex flex-col items-center py-8 px-4">
+        
+        {/* メインコンテンツカード */}
+        <div className="max-w-6xl w-full bg-[#fdf6e3]/95 backdrop-blur-sm rounded shadow-2xl p-6 md:p-8 border-4 border-[#8b5cf6] relative z-10 my-4">
           
           <div className="text-center mb-8 border-b-2 border-[#8b5cf6]/30 pb-4">
             <h2 className="text-3xl md:text-4xl font-serif font-bold text-[#4c1d95] flex items-center justify-center gap-3">
@@ -83,7 +86,7 @@ const CharCreateScreen = ({ onCreate, onBack }) => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-8 space-y-8">
               
-              {/* キャラクタープレビュー (選択に応じて画像が変化) */}
+              {/* 外見プレビュー */}
               <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex flex-col items-center">
                 <label className="block w-full text-sm font-bold text-[#5b21b6] mb-4 flex items-center gap-2">
                   <span className="w-2 h-4 bg-[#8b5cf6] rounded-full"></span> 外見 (Appearance)
@@ -94,9 +97,8 @@ const CharCreateScreen = ({ onCreate, onBack }) => {
                     alt="Character Preview" 
                     className="w-full h-full object-contain image-pixelated"
                     onError={(e) => {
-                      // 画像がない場合のフォールバックとしてSVGsを表示
                       e.target.style.display = 'none';
-                      e.target.nextSibling.style.display = 'block';
+                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
                     }}
                   />
                   <div style={{ display: 'none' }} className="w-full h-full">
@@ -105,7 +107,7 @@ const CharCreateScreen = ({ onCreate, onBack }) => {
                 </div>
               </div>
 
-              {/* 名前 */}
+              {/* 名前入力 */}
               <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
                 <label className="block text-sm font-bold text-[#5b21b6] mb-2 flex items-center gap-2">
                   <span className="w-2 h-4 bg-[#8b5cf6] rounded-full"></span> 冒険者名 (Name)
@@ -181,10 +183,11 @@ const CharCreateScreen = ({ onCreate, onBack }) => {
               </div>
             </div>
 
+            {/* 右側サイドバー：相性図とボタン */}
             <div className="lg:col-span-4 flex flex-col">
               <RelationDiagram />
               <div className="flex-1"></div>
-              <div className="flex flex-col gap-4 mt-6 bg-[#fdf6e3] pt-4 lg:static">
+              <div className="flex flex-col gap-4 mt-6">
                 <button 
                   onClick={() => onCreate(form)}
                   className="w-full py-4 bg-gradient-to-r from-[#7c3aed] to-[#6d28d9] text-white rounded-xl font-bold text-xl shadow-lg transition-all transform hover:scale-[1.02] flex items-center justify-center gap-3 border border-[#5b21b6]"
