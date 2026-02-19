@@ -299,13 +299,16 @@ const handleCreateChar = (formData) => {
 
   // --- モンスターデータ読み込み処理を追加 ---
   useEffect(() => {
-    const fetchMonsters = async () => {
-      // 公開したCSVのURLをここに貼り付けてください
-      const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUYOn06FemGZsLKQrl8O-DfBZ8Jf9lOc-Swlhv3BgjIkuPx-dUNyOk2z301fbUgdbJYLQSUprYL8jq/pub?gid=0&single=true&output=csv"; 
-      
-      try {
-        const response = await fetch(SHEET_CSV_URL);
-        const csvText = await response.text();
+  const fetchMonsters = async () => {
+    // 公開用URL
+    const BASE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUYOn06FemGZsLKQrl8O-DfBZ8Jf9lOc-Swlhv3BgjIkuPx-dUNyOk2z301fbUgdbJYLQSUprYL8jq/pub?gid=0&single=true&output=csv"; 
+    
+    // 【修正ポイント】 URLの末尾に現在の時間を付け加えて、キャッシュを無効化する
+    const SHEET_CSV_URL = `${BASE_URL}&cache_bust=${Date.now()}`; 
+    
+    try {
+      const response = await fetch(SHEET_CSV_URL);
+      const csvText = await response.text();
         
         // 改行コードで分割し、空行を除外してヘッダーを飛ばす
         const rows = csvText.split(/\r?\n/).filter(row => row.trim() !== "").slice(1);
@@ -405,8 +408,6 @@ const handleCreateChar = (formData) => {
   if (!MONSTER_DATA || Object.keys(MONSTER_DATA).length === 0) return;
 
   const eff = calculateEffectiveStats(player, equipped);
-
-  // そのフロア・その難易度のワードリストを取得（存在しない場合は1Fを参照）
   const wordPool = floorWords[difficulty][stage] || floorWords[difficulty]["1"] || [{display: "Ready", romaji: "ready"}];
 
   const enemies = [];
@@ -415,11 +416,18 @@ const handleCreateChar = (formData) => {
   for (let i = 0; i < 10; i++) {
     const isBoss = (i === 9);
     
-    // 1. 姿の抽選：その階層に出現可能なモンスターから選ぶ
+    // --- 修正ポイント：型変換を明示的に行う ---
     const availableKeys = Object.keys(MONSTER_DATA).filter(key => {
       const m = MONSTER_DATA[key];
-      return stage >= m.minFloor && stage <= m.maxFloor && (isBoss ? true : !m.isBossOnly);
+      // 文字列として読み込まれている可能性があるため Number() で変換して比較
+      const min = Number(m.minFloor);
+      const max = Number(m.maxFloor);
+      const currentStage = Number(stage);
+
+      return currentStage >= min && currentStage <= max && (isBoss ? true : !m.isBossOnly);
     });
+    // ---------------------------------------
+
     const typeKey = availableKeys[Math.floor(Math.random() * availableKeys.length)] || Object.keys(MONSTER_DATA)[0];
     const mData = MONSTER_DATA[typeKey];
 

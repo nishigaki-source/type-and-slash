@@ -559,43 +559,43 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
         )}
         
         <div 
-  key={`shake-${battleState.lastDamageTime}`}
-  className={`flex flex-col items-center justify-center transition-all duration-100 flex-1 ${
-    damageAnim === 'DAMAGE' ? 'animate-shake text-red-600' : ''
-  }`}
->
-  <div className="flex flex-col items-center mr-auto ml-4 sm:ml-12"> 
-    {/* キャラクター画像エリア */}
-    <div 
-      className={`flex items-center justify-center transition-all ${Object.values(battleState.buffs).some(v => v > 0) ? 'drop-shadow-[0_0_20px_rgba(251,146,60,0.5)]' : ''}`}
-      style={{ width: '420px', height: '420px' }}
-    >
-      <img 
-        src={characterImagePath} 
-        alt={player.name} 
-        className="w-full h-full object-contain image-pixelated drop-shadow-lg"
-        onError={(e) => {
-          e.target.style.display = 'none';
-          if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
-        }}
-      />
-      <div style={{ display: 'none' }} className="w-full h-full">
-        <PlayerIll gender={player.gender} race={player.race} />
-      </div>
-    </div>
+          key={`shake-${battleState.lastDamageTime}`}
+          className={`flex flex-col items-center justify-center transition-all duration-100 flex-1 ${
+            damageAnim === 'DAMAGE' ? 'animate-shake text-red-600' : ''
+          }`}
+        >
+          <div className="flex flex-col items-center mr-auto ml-4 sm:ml-12"> 
+            {/* キャラクター画像エリア */}
+            <div 
+              className={`flex items-center justify-center transition-all ${Object.values(battleState.buffs).some(v => v > 0) ? 'drop-shadow-[0_0_20px_rgba(251,146,60,0.5)]' : ''}`}
+              style={{ width: '420px', height: '420px' }}
+            >
+              <img 
+                src={characterImagePath} 
+                alt={player.name} 
+                className="w-full h-full object-contain image-pixelated drop-shadow-lg"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
+                }}
+              />
+              <div style={{ display: 'none' }} className="w-full h-full">
+                <PlayerIll gender={player.gender} race={player.race} />
+              </div>
+            </div>
 
-    {/* HPゲージ */}
-    <div className="mt-4 w-64 h-4 bg-slate-200 rounded-full border border-slate-300 overflow-hidden shadow-sm relative mx-auto">
-      <div className="bg-green-500 h-full transition-all duration-300" style={{ width: `${(battleState.playerHp / eff.battle.maxHp) * 100}%` }} />
-    </div>
+            {/* HPゲージ */}
+            <div className="mt-4 w-64 h-4 bg-slate-200 rounded-full border border-slate-300 overflow-hidden shadow-sm relative mx-auto">
+              <div className="bg-green-500 h-full transition-all duration-300" style={{ width: `${(battleState.playerHp / eff.battle.maxHp) * 100}%` }} />
+            </div>
 
-    {/* ステータス表示 */}
-    <div className="mt-4 text-center bg-white/40 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/20 shadow-sm">
-      <div className="font-bold text-xl text-slate-900 drop-shadow-sm">{player.name}</div>
-      <div className="font-mono text-xl text-slate-800 font-bold drop-shadow-sm">{battleState.playerHp} / {eff.battle.maxHp}</div>
-    </div>
-  </div>
-</div>
+            {/* ステータス表示 */}
+            <div className="mt-4 text-center bg-white/40 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/20 shadow-sm">
+              <div className="font-bold text-xl text-slate-900 drop-shadow-sm">{player.name}</div>
+              <div className="font-mono text-xl text-slate-800 font-bold drop-shadow-sm">{battleState.playerHp} / {eff.battle.maxHp}</div>
+            </div>
+          </div>
+        </div>
 
         {/* 中央エリア (VS + 出題ワード) */}
         <div className="flex flex-col items-center justify-center gap-8 shrink-0 z-20">
