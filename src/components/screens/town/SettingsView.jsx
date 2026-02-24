@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Settings, User, LogOut, Shield, HardDrive, Check, Copy, Languages } from 'lucide-react';
-import { JOBS, LANGUAGES } from '../../../constants/data'; // LANGUAGESをインポートに追加
+import { JOBS, LANGUAGES } from '../../../constants/data';
 import { doc, writeBatch } from 'firebase/firestore';
 import { db, GAME_APP_ID } from '../../../lib/firebase';
 
@@ -10,9 +10,9 @@ const SettingsView = ({
   difficulty, 
   setDifficulty, 
   onLogout,
-  language,    // 追加: 現在の言語設定
-  setLanguage, // 追加: 言語設定更新関数
-  t            // 追加: 翻訳関数
+  language,    
+  setLanguage, 
+  t            
 }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
@@ -27,46 +27,40 @@ const SettingsView = ({
   const saveProfileIcon = async (jobId) => {
     if (isSaving) return;
     setIsSaving(true);
-    setSaveStatus(t('SAVING') || '保存中...');
+    setSaveStatus(t('SAVING')); // 「ほぞんちゅう...」「保存中...」「Saving...」
     
     try {
       const batch = writeBatch(db);
-      
-      // 1. 自分のメインセーブデータの更新
       const userRef = doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'saveData', 'current');
-      batch.update(userRef, {
-        "player.profileJob": jobId
-      });
-
+      batch.update(userRef, { "player.profileJob": jobId });
       await batch.commit();
       
       setPlayer(prev => ({ ...prev, profileJob: jobId }));
-      setSaveStatus(t('ICON_UPDATED') || 'アイコンを更新しました！');
+      setSaveStatus(t('ICON_UPDATED')); // 更新完了メッセージ
       setTimeout(() => setSaveStatus(''), 2000);
     } catch (e) {
-      console.error("Icon update error:", e);
-      setSaveStatus(t('SAVE_ERROR') || '更新に失敗しました');
+      setSaveStatus(t('SAVE_ERROR')); // エラーメッセージ
     } finally {
       setIsSaving(false);
     }
   };
 
-  // 難易度設定のリスト（ラベルと説明を翻訳対応）
+  // 難易度設定のリスト
   const difficultyLevels = [
     { 
       key: 'EASY', 
       label: t('DIFFICULTY_EASY'), 
-      desc: t('DESC_EASY') || 'タイピングに慣れていない方向け。短い単語やひらがな中心に出題されます。' 
+      desc: t('DESC_EASY') 
     },
     { 
       key: 'NORMAL', 
       label: t('DIFFICULTY_NORMAL'), 
-      desc: t('DESC_NORMAL') || '一般的な難易度。漢字や日常的な単語、少し長めの文章が出題されます。' 
+      desc: t('DESC_NORMAL') 
     },
     { 
       key: 'HARD', 
       label: t('DIFFICULTY_HARD'), 
-      desc: t('DESC_HARD') || '熟練者向け。英単語、記号、プログラミング構文など複雑な入力が求められます。' 
+      desc: t('DESC_HARD') 
     }
   ];
 
@@ -87,7 +81,7 @@ const SettingsView = ({
         {/* プロフィールアイコン選択 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
-            <User size={16} /> {t('SELECT_ICON') || 'プロフィールアイコン選択'}
+            <User size={16} /> {t('SELECT_ICON')} 
           </h3>
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-4 justify-items-center">
             {Object.keys(JOBS).map((jobId) => {
@@ -120,11 +114,11 @@ const SettingsView = ({
         {/* アカウント情報 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
-            <Shield size={16} /> {t('ACCOUNT_INFO') || 'アカウント情報'}
+            <Shield size={16} /> {t('ACCOUNT_INFO')}
           </h3>
           <div className="space-y-3">
             <div className="space-y-1">
-              <span className="text-xs text-slate-400 font-bold ml-1">{t('PLAYER_ID') || 'プレイヤーID'}</span>
+              <span className="text-xs text-slate-400 font-bold ml-1">{t('PLAYER_ID')}</span>
               <div className="flex gap-2">
                 <div className="flex-1 p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm font-mono text-slate-800 break-all">
                   {player.id}
@@ -142,10 +136,10 @@ const SettingsView = ({
           </div>
         </div>
 
-        {/* 言語設定 (Language) */}
+        {/* 言語設定 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
-            <Languages size={16} /> {t('LANGUAGE_SETTINGS') || '言語設定 (Language)'}
+            <Languages size={16} /> {t('LANGUAGE_SETTINGS')}
           </h3>
           <div className="grid grid-cols-1 gap-2">
             {Object.values(LANGUAGES).map((lang) => (
@@ -167,13 +161,13 @@ const SettingsView = ({
           </div>
         </div>
 
-        {/* ゲームプレイ設定 (難易度) */}
+        {/* ゲームプレイ設定 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
-            <HardDrive size={16} /> {t('GAMEPLAY_SETTINGS') || 'ゲームプレイ設定'}
+            <HardDrive size={16} /> {t('GAMEPLAY_SETTINGS')}
           </h3>
           <div className="space-y-4">
-            <label className="text-xs text-slate-400 block font-bold ml-1">{t('GAME_DIFFICULTY') || 'ゲーム難易度'}</label>
+            <label className="text-xs text-slate-400 block font-bold ml-1">{t('GAME_DIFFICULTY')}</label>
             <div className="grid grid-cols-1 gap-3">
               {difficultyLevels.map((level) => (
                 <button

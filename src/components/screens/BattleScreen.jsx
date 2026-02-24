@@ -141,6 +141,8 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
   const [isComposing, setIsComposing] = useState(false);
   const [highlightedKey, setHighlightedKey] = useState(null);
   const [countdown, setCountdown] = useState(3);
+  const [combo, setCombo] = useState(0); 
+  const [popups, setPopups] = useState([]); // ダメージポップアップ管理用
 
   // 計測用 Refs
   const startTime = useRef(0);
@@ -208,9 +210,9 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
              newLog.push(`回避！ ${currentEnemy.name}の攻撃をかわした！`);
              damageType = 'DODGE';
           } else {
-             const enemyAtk = Math.max(5, prev.stage * 8 + 5);
-             const rawDmg = enemyAtk - (eff.battle.def * 0.5); 
-             const damage = Math.max(1, Math.floor(rawDmg * (1 + Math.random() * 0.2)));
+            const enemyAtk = currentEnemy.atk || 10; 
+            const rawDmg = enemyAtk - (eff.battle.def * 0.5); 
+            const damage = Math.max(1, Math.floor(rawDmg)); 
              
              newPlayerHp -= damage;
              newLog.push(`痛い！ ${currentEnemy.name}から${damage}のダメージ！`);
@@ -374,12 +376,15 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
           totalTypes.current += 1;
           playSound('TYPE'); 
           setTyped(val);
+          setCombo(prev => prev + 1);
+
           if (val === targetRomaji) {
             setTyped('');
-            attackEnemy();
+            attackEnemy(combo + 1);
           }
        } else {
           totalMiss.current += 1;
+          setCombo(0);
           const w = enemy.word.display;
           missedWords.current[w] = (missedWords.current[w] || 0) + 1;
           if (expectedChar) {
@@ -412,51 +417,90 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
      });
   };
 
-  const attackEnemy = () => {
-    const isHit = Math.random() * 100 < eff.battle.hitRate;
-    if (!isHit) {
-        setAnimEffect('MISS_ATTACK');
-        setTimeout(() => setAnimEffect(null), 500);
-        setBattleState(prev => ({ ...prev, log: [...prev.log, '攻撃ミス！'] }));
-        return;
-    }
-    const isCrit = Math.random() * 100 < eff.battle.critRate;
-    const effectType = isCrit ? 'CRITICAL' : 'ATTACK';
-    setAnimEffect(effectType);
-    setTimeout(() => setAnimEffect(null), 300);
+  const attackEnemy = (currentCombo) => {
+  // 1. 命中判定
+  const isHit = Math.random() * 100 < eff.battle.hitRate;
+  if (!isHit) {
+    setAnimEffect('MISS_ATTACK');
+    setTimeout(() => setAnimEffect(null), 500);
+    setBattleState(prev => ({ ...prev, log: [...prev.log, '攻撃ミス！'] }));
+    return;
+  }
 
-    let dmg = Math.floor(eff.battle.atk * (1 + Math.random() * 0.2));
-    if (isCrit) dmg = Math.floor(dmg * 1.5);
+  // 2. クリティカル判定
+  const isCrit = Math.random() * 100 < eff.battle.critRate;
+  setAnimEffect(isCrit ? 'CRITICAL' : 'ATTACK');
+  setTimeout(() => setAnimEffect(null), 300);
 
-    setBattleState(prev => {
-        const newEnemies = [...prev.enemies];
-        const currentEnemy = newEnemies[prev.currentEnemyIndex];
-        currentEnemy.hp -= dmg;
-        currentEnemy.currentAttackGauge = Math.max(0, currentEnemy.currentAttackGauge - 300); 
-        const newLog = [...prev.log, `${enemy.name}に${dmg}のダメージ！${isCrit ? '(会心)' : ''}`];
-        
-        let nextIndex = prev.currentEnemyIndex;
-        let isBossDefeated = false;
+  // --- 3. ダメージ計算（ここで一回だけ計算し、確定させる） ---
+  const comboBonus = Math.floor(currentCombo / 10) * 0.1;
+  const comboMultiplier = 1 + comboBonus;
+  let finalDmg = Math.floor(eff.battle.atk * (1 + Math.random() * 0.2) * comboMultiplier);
+    if (isCrit) finalDmg = Math.floor(finalDmg * 1.5);
 
-        if (currentEnemy.hp <= 0) {
-            currentEnemy.hp = 0;
-            newLog.push(`${enemy.name}を倒した！`);
-            if (prev.currentEnemyIndex >= prev.enemies.length - 1) {
-                isBossDefeated = true;
-            } else {
-                nextIndex = prev.currentEnemyIndex + 1;
-            }
-        }
-        return {
-            ...prev,
-            enemies: newEnemies,
-            currentEnemyIndex: nextIndex,
-            log: newLog,
-            lastTick: Date.now(),
-            isBossDefeated: isBossDefeated
-        };
-    });
+  // ★ ポップアップの生成
+  const popupId = Date.now();
+  const newPopup = {
+    id: popupId,
+    value: finalDmg,
+    isCrit: isCrit,
+    x: Math.random() * 60 - 30 // 左右に少し散らす
   };
+  setPopups(prev => [...prev, newPopup]);
+  setTimeout(() => setPopups(prev => prev.filter(p => p.id !== popupId)), 800);
+
+  // 4. 確定した finalDmg を使って状態を更新
+  setBattleState(prev => {
+    // prev（最新のステート）から現在の敵データを取得
+    const newEnemies = [...prev.enemies];
+    const currentEnemy = { ...newEnemies[prev.currentEnemyIndex] }; // シャローコピーで安全に更新
+    
+    // 現在のHPから確定ダメージを引く（0未満にならないように Math.max を使用）
+    const nextHp = Math.max(0, currentEnemy.hp - finalDmg);
+    currentEnemy.hp = nextHp;
+    
+    // 敵のゲージを押し戻す
+    currentEnemy.currentAttackGauge = Math.max(0, currentEnemy.currentAttackGauge - 300); 
+
+    // 配列に戻す
+    newEnemies[prev.currentEnemyIndex] = currentEnemy;
+
+    // ログメッセージの作成
+    const comboInfo = comboBonus > 0 ? ` [Combo x${comboMultiplier.toFixed(1)}]` : '';
+    const critInfo = isCrit ? '(会心！)' : '';
+    const newLogEntry = `${currentEnemy.name}に${finalDmg}のダメージ！${critInfo}${comboInfo}`;
+    
+    let nextIndex = prev.currentEnemyIndex;
+    let isBossDefeated = false;
+
+    // 撃破判定
+    if (currentEnemy.hp <= 0) {
+      const killLog = `${currentEnemy.name}を倒した！`;
+      const updatedLog = [...prev.log, newLogEntry, killLog];
+      
+      if (prev.currentEnemyIndex >= prev.enemies.length - 1) {
+        isBossDefeated = true;
+      } else {
+        nextIndex = prev.currentEnemyIndex + 1;
+      }
+      
+      return {
+        ...prev,
+        enemies: newEnemies,
+        currentEnemyIndex: nextIndex,
+        log: updatedLog.slice(-5),
+        isBossDefeated: isBossDefeated
+      };
+    }
+
+    return {
+      ...prev,
+      enemies: newEnemies,
+      log: [...prev.log, newLogEntry].slice(-5),
+      lastTick: Date.now()
+    };
+  });
+};
 
   const keepFocus = () => { if(inputRef.current) inputRef.current.focus(); };
   const attackProgress = Math.min(100, (enemy.currentAttackGauge / enemy.attackInterval) * 100);
@@ -464,7 +508,6 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
 
   return (
     <div className="h-full bg-slate-50 text-slate-800 flex flex-col relative overflow-hidden" onClick={keepFocus}>
-      {/* 背景画像の設定セクション */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         {battleState.zoneName === "はじまりの草原" ? (
           <div 
@@ -479,13 +522,12 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
           </div>
         )}
       </div>
-      {/* BattleScreen.jsx の return 直後のスタイル定義部分 */}
+
       <style>{`
         @keyframes slide-bg { 
           from { transform: translateX(0); } 
           to { transform: translateX(-50%); } 
         }
-
         @keyframes shake {
           0% { transform: translateX(0); }
           25% { transform: translateX(-15px); }
@@ -494,35 +536,43 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
           100% { transform: translateX(0); }
         }
         .animate-shake { animation: shake 0.2s ease-in-out; }
-        
         @keyframes flash-red {
           0% { background-color: rgba(255, 0, 0, 0); }
           50% { background-color: rgba(255, 0, 0, 0.4); }
           100% { background-color: rgba(255, 0, 0, 0); }
         }
         .animate-damage-flash { animation: flash-red 0.3s ease-out; }
+        @keyframes bounce-slow {
+          0%, 100% { transform: translateY(-5%); }
+          50% { transform: translateY(5%); }
+        }
+        .animate-bounce-slow { animation: bounce-slow 3s infinite ease-in-out; }
+
+        @keyframes damage-up {
+          0% { transform: translateY(0); opacity: 1; }
+          100% { transform: translateY(-50px); opacity: 0; }
+        }
+        .animate-damage-up { 
+          animation: damage-up 0.8s ease-out forwards; 
+        }   
       `}</style>
 
-      {/* ヘッダー情報 */}
       <div className="relative z-10 p-4 flex justify-between items-start bg-white/50 backdrop-blur-md border-b border-slate-200">
           <div className="text-xl font-bold italic text-slate-700 flex items-center gap-2">
             <span className="bg-blue-600 text-white w-8 h-8 rounded flex items-center justify-center text-sm shadow-sm">{battleState.stage}</span>
             STAGE {battleState.stage}
           </div>
-          <div className="flex items-center gap-2 flex-col items-end">
+          <div className="flex flex-col items-end">
              <div className="text-xs text-blue-600 font-bold tracking-widest uppercase mb-1 bg-white/70 px-2 py-0.5 rounded border border-blue-100">{battleState.zoneName}</div>
              <div className="flex items-center gap-4">
                {battleState.statusAilments.poison && <div className="bg-purple-100 px-3 py-1 rounded text-purple-700 animate-pulse font-bold flex items-center gap-1 border border-purple-200"><Skull size={14}/> 毒</div>}
                {Object.entries(battleState.buffs).map(([key, val]) => val > 0 && (
                   <div key={key} className="bg-orange-100 px-3 py-1 rounded text-orange-700 font-bold flex items-center gap-1 border border-orange-200"><ArrowRight size={14} className="-rotate-45"/> {key.toUpperCase()} UP</div>
                ))}
-               
                <button 
                  onClick={(e) => {
                    e.stopPropagation();
-                   if (window.confirm('戦闘を放棄して町へ戻りますか？')) {
-                     onRetreat();
-                   }
+                   if (window.confirm('戦闘を放棄して町へ戻りますか？')) onRetreat();
                  }}
                  className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded shadow-md font-bold text-xs flex items-center gap-1 transition-colors"
                >
@@ -532,44 +582,25 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
           </div>
       </div>
 
-      {/* カウントダウン */}
       {countdown > 0 && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] animate-fade-in">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
           <div className="text-9xl font-black text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] animate-bounce">
             {countdown}
           </div>
         </div>
       )}
 
-      {/* 入力モードインジケーター */}
       <div className="absolute top-20 right-4 z-50 pointer-events-none">
         <div className={`px-4 py-2 rounded-full font-bold text-sm shadow-lg border-2 transition-all ${isComposing ? 'bg-red-100 text-red-600 border-red-500 animate-pulse' : 'bg-blue-100 text-blue-600 border-blue-500'}`}>
            {isComposing ? '⚠️ 日本語入力中' : 'A 英数モード'}
         </div>
       </div>
 
-      {/* 529行目付近：メインバトル画面のレイアウト修正 */}
       <div className="flex-1 flex items-center justify-between px-4 sm:px-10 relative z-10 max-w-full mx-auto w-full mb-32">
-
-        {damageAnim === 'DAMAGE' && (
-          <div 
-            key={`flash-${battleState.lastDamageTime}`} 
-            className="fixed inset-0 pointer-events-none z-[60] animate-damage-flash" 
-          />
-        )}
-        
-        <div 
-          key={`shake-${battleState.lastDamageTime}`}
-          className={`flex flex-col items-center justify-center transition-all duration-100 flex-1 ${
-            damageAnim === 'DAMAGE' ? 'animate-shake text-red-600' : ''
-          }`}
-        >
+        {damageAnim === 'DAMAGE' && <div className="fixed inset-0 pointer-events-none z-[60] animate-damage-flash" />}
+        <div className={`flex flex-col items-center justify-center transition-all duration-100 flex-1 ${damageAnim === 'DAMAGE' ? 'animate-shake text-red-600' : ''}`}>
           <div className="flex flex-col items-center mr-auto ml-4 sm:ml-12"> 
-            {/* キャラクター画像エリア */}
-            <div 
-              className={`flex items-center justify-center transition-all ${Object.values(battleState.buffs).some(v => v > 0) ? 'drop-shadow-[0_0_20px_rgba(251,146,60,0.5)]' : ''}`}
-              style={{ width: '420px', height: '420px' }}
-            >
+            <div className={`flex items-center justify-center transition-all ${Object.values(battleState.buffs).some(v => v > 0) ? 'drop-shadow-[0_0_20px_rgba(251,146,60,0.5)]' : ''}`} style={{ width: '420px', height: '420px' }}>
               <img 
                 src={characterImagePath} 
                 alt={player.name} 
@@ -579,29 +610,34 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
                   if (e.target.nextSibling) e.target.nextSibling.style.display = 'block';
                 }}
               />
-              <div style={{ display: 'none' }} className="w-full h-full">
-                <PlayerIll gender={player.gender} race={player.race} />
-              </div>
+              <div style={{ display: 'none' }} className="w-full h-full"><PlayerIll gender={player.gender} race={player.race} /></div>
             </div>
-
-            {/* HPゲージ */}
             <div className="mt-4 w-64 h-4 bg-slate-200 rounded-full border border-slate-300 overflow-hidden shadow-sm relative mx-auto">
               <div className="bg-green-500 h-full transition-all duration-300" style={{ width: `${(battleState.playerHp / eff.battle.maxHp) * 100}%` }} />
             </div>
-
-            {/* ステータス表示 */}
             <div className="mt-4 text-center bg-white/40 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/20 shadow-sm">
-              <div className="font-bold text-xl text-slate-900 drop-shadow-sm">{player.name}</div>
-              <div className="font-mono text-xl text-slate-800 font-bold drop-shadow-sm">{battleState.playerHp} / {eff.battle.maxHp}</div>
+              <div className="font-bold text-xl text-slate-900">{player.name}</div>
+              <div className="font-mono text-xl text-slate-800 font-bold">{battleState.playerHp} / {eff.battle.maxHp}</div>
             </div>
           </div>
         </div>
 
-        {/* 中央エリア (VS + 出題ワード) */}
         <div className="flex flex-col items-center justify-center gap-8 shrink-0 z-20">
+          <div className="h-20 flex items-center justify-center">
+            {combo >= 2 && (
+              <div className="flex flex-col items-center animate-bounce">
+                <span className="text-6xl font-black text-yellow-400 italic drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]">
+                  {combo}<span className="text-2xl ml-1">COMBO</span>
+                </span>
+                {combo >= 10 && (
+                  <span className="text-sm font-bold bg-yellow-500 text-black px-3 py-0.5 rounded-full mt-1 shadow-lg border-2 border-black/20">
+                    DAMAGE x{(1 + Math.floor(combo / 10) * 0.1).toFixed(1)}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           <div className="text-5xl font-black text-white italic opacity-80 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">VS</div>
-          
-          {/* 出題ワードをここへ移動 */}
           <div className="bg-white/95 backdrop-blur px-10 py-6 rounded-3xl border-4 border-blue-400 min-w-[320px] shadow-[0_10px_25px_rgba(0,0,0,0.2)] text-center animate-fade-in">
             <div className="text-base text-slate-500 mb-1 font-bold tracking-tight">{enemy.word.display}</div>
             <div className="text-4xl sm:text-5xl font-mono font-black tracking-[0.15em]">
@@ -611,44 +647,56 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
           </div>
         </div>
 
-        {/* モンスター側 (右) */}
         <div className={`flex flex-col items-center justify-center transition-all duration-200 ${animEffect === 'ATTACK' || animEffect === 'CRITICAL' ? 'opacity-50 scale-95' : ''} flex-1`}>
           <div className="flex flex-col items-center ml-auto mr-4 sm:mr-12">
             <div className="mb-4 text-center">
-              <div className="font-bold text-xl text-slate-900 bg-white/60 backdrop-blur-sm px-6 py-1 rounded-full border border-white/30 shadow-sm drop-shadow-sm">
-                {enemy.name}
-              </div>
+              <div className="font-bold text-xl text-slate-900 bg-white/60 backdrop-blur-sm px-6 py-1 rounded-full border border-white/30 shadow-sm drop-shadow-sm">{enemy.name}</div>
             </div>
-
             <div className="relative flex flex-col items-center justify-center min-h-[420px]">
+              {/* ★ ダメージポップアップのレンダリング */}
+              {popups.map(popup => (
+                <div
+                  key={popup.id}
+                  className={`absolute z-[100] font-black italic animate-damage-up pointer-events-none ${
+                    popup.isCrit ? 'text-4xl text-yellow-400' : 'text-3xl text-red-500'
+                  }`}
+                  style={{ 
+                    top: '20%', 
+                    left: `calc(50% + ${popup.x}px)`,
+                    textShadow: '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000'
+                  }}
+                >
+                  -{popup.value}
+                </div>
+              ))}
               {enemy.imageId ? (
                 <img 
                   src={`/monsters/${enemy.imageId}`} 
                   alt={enemy.name}
                   className={`object-contain transition-transform ${enemy.isBoss ? 'animate-bounce-slow' : ''}`}
-                  style={{ 
-                    imageRendering: 'pixelated',
-                    width: `${MONSTER_DATA[enemy.type]?.displaySize || 128}px`,
-                    height: `${MONSTER_DATA[enemy.type]?.displaySize || 128}px`
-                  }}
+                  style={{ imageRendering: 'pixelated', width: `${MONSTER_DATA[enemy.type]?.displaySize || 128}px`, height: `${MONSTER_DATA[enemy.type]?.displaySize || 128}px` }}
                 />
               ) : (
                 <div className="w-32 h-32 p-2"><MonsterIll /></div>
               )}
-              
               <div className="mt-4 w-64 h-3 bg-slate-200 rounded-full border border-slate-300 overflow-hidden shadow-sm relative mx-auto">
-                <div className="bg-red-500 h-full transition-all duration-200" style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} />
+              <div 
+                className="bg-red-500 h-full transition-all duration-200" 
+                style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%` }} 
+              />
               </div>
 
-              {/* 攻撃予兆ゲージ */}
+              {/* ★ ここに追加：モンスターのHP数値表示 */}
+              <div className="mt-1 text-center font-mono font-bold text-slate-700">
+                {enemy.hp} / {enemy.maxHp}
+              </div>
+
               <div className="mt-4 w-40 flex items-center gap-2 bg-black/20 p-1 rounded-full px-2">
                 <AlertTriangle size={14} className={attackProgress > 80 ? 'text-red-500 animate-pulse' : 'text-slate-200'} />
                 <div className="flex-1 h-1.5 bg-white/30 rounded-full overflow-hidden">
                   <div className={`h-full transition-all duration-100 ${attackProgress > 80 ? 'bg-red-500' : 'bg-yellow-400'}`} style={{ width: `${attackProgress}%` }}></div>
                 </div>
               </div>
-
-              {/* ヒット時エフェクト */}
               {animEffect === 'ATTACK' && <div className="absolute top-1/2 text-7xl font-black text-yellow-500 italic animate-bounce pointer-events-none z-30 drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]">SLASH!</div>}
               {animEffect === 'CRITICAL' && <div className="absolute top-1/2 text-7xl font-black text-red-600 italic animate-bounce pointer-events-none z-30 drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]">CRITICAL!</div>}
             </div>
@@ -656,41 +704,24 @@ const BattleScreen = ({ battleState, setBattleState, player, equipped, inventory
         </div>
       </div>
 
-      <input 
-        ref={inputRef} 
-        type="text" 
-        className="opacity-0 absolute top-0 left-0 w-full h-full cursor-default" 
-        value={typed} 
-        onChange={handleInput} 
-        onCompositionStart={() => setIsComposing(true)}
-        onCompositionEnd={() => setIsComposing(false)}
-        autoFocus
-        autoComplete="off"
-        spellCheck="false"
-      />
+      <input ref={inputRef} type="text" className="opacity-0 absolute top-0 left-0 w-full h-full cursor-default" value={typed} onChange={handleInput} onCompositionStart={() => setIsComposing(true)} onCompositionEnd={() => setIsComposing(false)} autoFocus autoComplete="off" spellCheck="false" />
 
-      {/* 下部の仮想キーボード部分の拡大設定（Keyboardコンポーネントの呼び出し箇所） */}
       <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-20 w-full flex justify-center scale-110 sm:scale-125">
         <Keyboard activeKey={highlightedKey} />
       </div>
 
       <div className="absolute bottom-80 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
-   {consumables.slice(0, 9).map((item, i) => {
-     const itemData = CONSUMABLES[item.consumableId];
-     if (!itemData) return null;
-     return (
-       <button 
-         key={item.id} 
-         onClick={(e) => { e.stopPropagation(); handleUseItem(item); }}
-         className="w-10 h-10 sm:w-12 sm:h-12 bg-white/90 border-2 border-slate-300 rounded flex flex-col items-center justify-center hover:border-yellow-500 hover:scale-110 transition-all relative shadow-md"
-         title={itemData.desc}
-       >
-         <div className="scale-75">{itemData.icon}</div>
-         <div className="absolute -top-2 -right-2 bg-slate-800 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center border border-slate-600">{i + 1}</div>
-       </button>
-     );
-   })}
-</div>
+        {consumables.slice(0, 9).map((item, i) => {
+          const itemData = CONSUMABLES[item.consumableId];
+          if (!itemData) return null;
+          return (
+            <button key={item.id} onClick={(e) => { e.stopPropagation(); handleUseItem(item); }} className="w-10 h-10 sm:w-12 sm:h-12 bg-white/90 border-2 border-slate-300 rounded flex flex-col items-center justify-center hover:border-yellow-500 hover:scale-110 transition-all relative shadow-md" title={itemData.desc}>
+              <div className="scale-75">{itemData.icon}</div>
+              <div className="absolute -top-2 -right-2 bg-slate-800 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center border border-slate-600">{i + 1}</div>
+            </button>
+          );
+        })}
+      </div>
 
       <div className="h-28 bg-slate-100 p-4 overflow-y-auto text-xs font-mono text-slate-600 border-t border-slate-300 z-10">
         {battleState.log.map((l, i) => <div key={i} className="border-b border-slate-200 py-1">{l}</div>)}

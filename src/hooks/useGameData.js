@@ -8,64 +8,71 @@ export const useGameData = () => {
   const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
-    const fetchAllData = async () => {
+    const fetchData = async () => {
       try {
         // 1. UIテキストの読み込み
-        const UI_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfEgWNxGwbva_n3iSREx58_lkbt6LqGAHrRJJSSGcoahWRV71wTzXtIDYNFL44RqIVj3ZRiBd3j9bt/pub?gid=1940138879&single=true&output=csv";
-        const uiRes = await fetch(`${UI_CSV_URL}&cache_bust=${Date.now()}`);
-        const uiText = await uiRes.text();
-        const uiRows = uiText.split(/\r?\n/).filter(row => row.trim() !== "").slice(1);
-        const uiMapping = {};
-        uiRows.forEach(row => {
-          const [key, kanji, kana, en] = row.split(',');
-          uiMapping[key] = { JA_KANJI: kanji, JA_KANA: kana, EN: en };
-        });
-        setUiTextData(uiMapping);
+        const UI_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfEgWNxGwbva_n3iSREx58_lkbt6LqGAHrRJJSSGcoahWRV71wTzXtIDYNFL44RqIVj3ZRiBd3j9bt/pub?gid=1940138879&single=true&output=csv";
+        const uiRes = await fetch(`${UI_URL}&cache_bust=${Date.now()}`);
+        const uiRows = (await uiRes.text()).split(/\r?\n/).filter(r => r.trim()).slice(1);
+        const uiMap = {};
+        uiRows.forEach(r => { const [k, j1, j2, e] = r.split(','); uiMap[k] = { JA_KANJI: j1, JA_KANA: j2, EN: e }; });
+        setUiTextData(uiMap);
 
-        // 2. モンスターデータの読み込み
-        const MONSTER_BASE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUYOn06FemGZsLKQrl8O-DfBZ8Jf9lOc-Swlhv3BgjIkuPx-dUNyOk2z301fbUgdbJYLQSUprYL8jq/pub?gid=0&single=true&output=csv";
-        const monRes = await fetch(`${MONSTER_BASE_URL}&cache_bust=${Date.now()}`);
-        const monText = await monRes.text();
-        const monRows = monText.split(/\r?\n/).filter(row => row.trim() !== "").slice(1);
-        const newMonsterData = {};
-        monRows.forEach(row => {
-          const cols = row.split(',');
-          if (cols.length < 11) return;
-          newMonsterData[cols[0].trim()] = {
-            name: cols[1].trim(),
-            imageId: cols[2].trim(),
-            hpMod: parseFloat(cols[3]) || 1.0,
-            minFloor: parseInt(cols[4]) || 1,
-            maxFloor: parseInt(cols[5]) || 100,
-            displaySize: parseInt(cols[6]) || 128,
-            isBossOnly: cols[7].trim().toUpperCase() === 'TRUE'
+        // 2. フロア別ワードの読み込み
+        const WORD_URLS = {
+          EASY: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUX7NWJ_6HA9gpX6yc3EGiSCL1GOiMAk6_Mp8gg2JuvuCgodmO4vARpOqx-8v8mXPQ8Zz1hkbgfkP-/pub?output=csv",
+          NORMAL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUX7NWJ_6HA9gpX6yc3EGiSCL1GOiMAk6_Mp8gg2JuvuCgodmO4vARpOqx-8v8mXPQ8Zz1hkbgfkP-/pub?output=csv",
+          HARD: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUX7NWJ_6HA9gpX6yc3EGiSCL1GOiMAk6_Mp8gg2JuvuCgodmO4vARpOqx-8v8mXPQ8Zz1hkbgfkP-/pub?output=csv"
+        };
+        const newFloorWords = { EASY: {}, NORMAL: {}, HARD: {} };
+        for (const m of ['EASY', 'NORMAL', 'HARD']) {
+          const res = await fetch(WORD_URLS[m]);
+          const rows = (await res.text()).split(/\r?\n/).filter(r => r.trim()).slice(1);
+          rows.forEach(r => {
+            const c = r.split(','); if (c.length < 3) return;
+            newFloorWords[m][c[0].trim()] = c[1].split('|').map((d, i) => ({ display: d, romaji: (c[2].split('|')[i] || d).toLowerCase().trim() }));
+          });
+        }
+        setFloorWords(newFloorWords);
+
+        // 3. モンスターデータの読み込み (列指定に合わせて修正)
+        const MON_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUYOn06FemGZsLKQrl8O-DfBZ8Jf9lOc-Swlhv3BgjIkuPx-dUNyOk2z301fbUgdbJYLQSUprYL8jq/pub?gid=0&single=true&output=csv";
+        const monRes = await fetch(`${MON_URL}&cache_bust=${Date.now()}`);
+        const monRows = (await monRes.text()).split(/\r?\n/).filter(r => r.trim()).slice(1);
+        const monMap = {};
+        
+        monRows.forEach(r => {
+          const c = r.split(','); 
+          if (c.length < 9) return; // I列(8)までデータが必要なので最小9列チェック
+          
+          const key = c[0].trim(); // A列：ID
+          monMap[key] = {
+            key: key,
+            name: c[1].trim(),       // B列：名前
+            imageId: c[2].trim(),    // C列：画像ファイル名
+            hp: parseInt(c[3]) || 100,      // D列：HP
+            atk: parseInt(c[4]) || 10,      // E列：攻撃力
+            minFloor: parseInt(c[5]) || 1,  // F列：出現開始階層
+            maxFloor: parseInt(c[6]) || 100, // G列：出現終了階層
+            displaySize: parseInt(c[7]) || 128, // H列：表示サイズ
+            isBossOnly: c[8].trim().toUpperCase() === 'TRUE' // I列：ボス専用フラグ
           };
         });
-        setMonsterData(newMonsterData);
+        setMonsterData(monMap);
 
-        // 3. キャラクターガチャデータの読み込み
+        // 4. ガチャデータの読み込み
         const GACHA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSX390LCOBUeNUoNT470sNNpvpRe3IcN32-Nx3xmp86xcy44YzaDnnBgM4cM2XMUcXLHOLokfAObT3c/pub?gid=2090543331&single=true&output=csv";
-        const gachaRes = await fetch(GACHA_URL);
-        const gachaText = await gachaRes.text();
-        const gachaRows = gachaText.split(/\r?\n/).filter(row => row.trim() !== "").slice(1);
-        const loadedGacha = gachaRows.map(row => {
-          const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-          const clean = (val) => val?.replace(/^"|"$/g, '').trim() || "";
-          return {
-            id: clean(cols[0]), name: clean(cols[1]), race: clean(cols[2]), gender: clean(cols[3]), job: clean(cols[4]),
-            rarity: clean(cols[5]) || 'N',
-            stats: { hp: parseInt(clean(cols[6])), str: parseInt(clean(cols[7])), vit: parseInt(clean(cols[8])), dex: parseInt(clean(cols[9])), agi: parseInt(clean(cols[10])), luk: parseInt(clean(cols[11])) },
-            chance: parseFloat(clean(cols[13])), imageId: clean(cols[14])
-          };
+        const gachaRows = (await (await fetch(GACHA_URL)).text()).split(/\r?\n/).filter(r => r.trim()).slice(1);
+        const gachaData = gachaRows.map(r => {
+          const c = r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+          const cl = (v) => v?.replace(/^"|"$/g, '').trim() || "";
+          return { id: cl(c[0]), name: cl(c[1]), race: cl(c[2]), gender: cl(c[3]), job: cl(c[4]), rarity: cl(c[5])||'N', stats: { hp: parseInt(cl(c[6])), str: parseInt(cl(c[7])), vit: parseInt(cl(c[8])), dex: parseInt(cl(c[9])), agi: parseInt(cl(c[10])), luk: parseInt(cl(c[11])) }, chance: parseFloat(cl(c[13])), imageId: cl(c[14]) };
         });
-        setCharGachaData(loadedGacha);
-
+        setCharGachaData(gachaData);
         setDataLoaded(true);
-      } catch (e) {
-        console.error("Data load failed:", e);
-      }
+      } catch (e) { console.error("Data load failed", e); }
     };
-    fetchAllData();
+    fetchData();
   }, []);
 
   return { uiTextData, floorWords, charGachaData, dataLoaded };
