@@ -5,7 +5,7 @@ import {
 import { collection, onSnapshot, doc, deleteDoc, updateDoc, arrayUnion, query, where } from 'firebase/firestore'; 
 import { db, GAME_APP_ID } from '../../lib/firebase';
 
-// 分割したコンポーネントをインポート
+// 各種ビューコンポーネントのインポート
 import MenuSidebar from './town/MenuSidebar';
 import HomeView from './town/HomeView';
 import StatusView from './town/StatusView';
@@ -27,16 +27,22 @@ const TownScreen = ({
   onEquip, onUnequip, onStartBattle, onLogout, difficulty, setDifficulty,
   onStartArena,
   isGuest,
-  charGachaData // ★ここに charGachaData を追加
-}) => {
+  charGachaData,
+  // 多言語対応用の追加 props
+  language,
+  setLanguage,
+  t }) => {
+
   const [activeView, setActiveView] = useState('HOME');
   const [selectedStage, setSelectedStage] = useState(1);
   const [chatTarget, setChatTarget] = useState(null);
   const [badgeCounts, setBadgeCounts] = useState({ friend: 0, mail: 0 });
 
+  // プレゼント、フレンド申請、チャット未読のリアルタイム監視
   useEffect(() => {
     if (!player || isGuest) return;
 
+    // プレゼントボックスの監視
     const giftsRef = collection(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'gifts');
     const unsubGifts = onSnapshot(giftsRef, (snapshot) => {
       snapshot.docChanges().forEach(async (change) => {
@@ -48,6 +54,7 @@ const TownScreen = ({
             const userRef = doc(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'saveData', 'current');
             await updateDoc(userRef, { inventory: arrayUnion(item) });
             await deleteDoc(change.doc.ref);
+            // アラートメッセージも本来は t() を使うのが理想的です
             alert(`🎁 ${giftData.senderName}さんからプレゼント\n「${item.name}」が届きました！`);
           } catch (e) {
             console.error("Gift receive error:", e);
@@ -56,11 +63,13 @@ const TownScreen = ({
       });
     });
 
+    // フレンド申請の監視
     const requestsRef = collection(db, 'artifacts', GAME_APP_ID, 'users', player.id, 'friendRequests');
     const unsubRequests = onSnapshot(requestsRef, (snapshot) => {
       setBadgeCounts(prev => ({ ...prev, friend: snapshot.size }));
     });
 
+    // チャット未読の監視
     const chatsRef = collection(db, 'artifacts', GAME_APP_ID, 'chats');
     const qChats = query(chatsRef, where('participants', 'array-contains', player.id));
     const unsubChats = onSnapshot(qChats, (snapshot) => {
@@ -100,46 +109,56 @@ const TownScreen = ({
     setActiveView('MAIL');
   };
 
+  // 言語と翻訳関数を各 View に渡す
   const renderContent = () => {
-    switch(activeView) {
-      case 'HOME': return <HomeView player={player} difficulty={difficulty} onMoveToDungeon={handleGoToDungeon} />;
-      case 'STATUS': return <StatusView player={player} setPlayer={setPlayer} equipped={equipped} charGachaData={charGachaData} />;
-      case 'SHOP': return <ShopView player={player} inventory={inventory} equipped={equipped} shopItems={shopItems} setShopItems={setShopItems} setPlayer={setPlayer} setInventory={setInventory} />;
-      case 'TRADE':
-        if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
-        return <TradeView player={player} inventory={inventory} equipped={equipped} setPlayer={setPlayer} setInventory={setInventory} />;
-      case 'DUNGEON': return <DungeonView player={player} selectedStage={selectedStage} setSelectedStage={setSelectedStage} onStartBattle={onStartBattle} difficulty={difficulty} />;
-      case 'ITEM':
-        return <InventoryView player={player} inventory={inventory} equipped={equipped} onEquip={onEquip} onUnequip={onUnequip} toggleLock={toggleLock} setPlayer={setPlayer} setInventory={setInventory} />;
-      case 'ACHIEVEMENT': return <DashboardView player={player} />;
-      // src/components/screens/TownScreen.jsx 117行目付近
+    // 共通の props オブジェクト
+    const commonProps = { language, t };
 
+    switch(activeView) {
+      case 'HOME': 
+        return <HomeView player={player} difficulty={difficulty} onMoveToDungeon={handleGoToDungeon} {...commonProps} />;
+      case 'STATUS': 
+        return <StatusView player={player} setPlayer={setPlayer} equipped={equipped} charGachaData={charGachaData} {...commonProps} />;
+      case 'SHOP': 
+        return <ShopView player={player} inventory={inventory} equipped={equipped} shopItems={shopItems} setShopItems={setShopItems} setPlayer={setPlayer} setInventory={setInventory} {...commonProps} />;
+      case 'TRADE':
+        if (isGuest) return <HomeView player={player} difficulty={difficulty} {...commonProps} />;
+        return <TradeView player={player} inventory={inventory} equipped={equipped} setPlayer={setPlayer} setInventory={setInventory} {...commonProps} />;
+      case 'DUNGEON': 
+        return <DungeonView player={player} selectedStage={selectedStage} setSelectedStage={setSelectedStage} onStartBattle={onStartBattle} difficulty={difficulty} {...commonProps} />;
+      case 'ITEM':
+        return <InventoryView player={player} inventory={inventory} equipped={equipped} onEquip={onEquip} onUnequip={onUnequip} toggleLock={toggleLock} setPlayer={setPlayer} setInventory={setInventory} {...commonProps} />;
+      case 'ACHIEVEMENT': 
+        return <DashboardView player={player} {...commonProps} />;
       case 'ARENA': 
-        if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
-        return <ArenaView player={player} equipped={equipped} userId={player.id || 'guest'} onStartMatch={onStartArena} />;
-      
+        if (isGuest) return <HomeView player={player} difficulty={difficulty} {...commonProps} />;
+        return <ArenaView player={player} equipped={equipped} userId={player.id || 'guest'} onStartMatch={onStartArena} {...commonProps} />;
       case 'GACHA': 
+        return <GachaView player={player} setPlayer={setPlayer} setInventory={setInventory} charGachaData={charGachaData} {...commonProps} />;
+      case 'QUEST': 
+        return <PlaceholderView title={t('QUEST')} icon={<FileText size={48}/>} />;
+      case 'FRIEND':
+        if (isGuest) return <HomeView player={player} difficulty={difficulty} {...commonProps} />;
+        return <FriendView player={player} inventory={inventory} setInventory={setInventory} onStartChat={handleStartChat} {...commonProps} />;
+      case 'MAIL':
+        if (isGuest) return <HomeView player={player} difficulty={difficulty} {...commonProps} />;
+        return <MailView player={player} initialTarget={chatTarget} onClose={() => { setChatTarget(null); setActiveView('FRIEND'); }} {...commonProps} />;
+      case 'INFO': 
+        return <PlaceholderView title={t('INFO')} icon={<Megaphone size={48}/>} />;
+      case 'SETTINGS':
         return (
-          <GachaView 
+          <SettingsView 
             player={player} 
             setPlayer={setPlayer} 
-            setInventory={setInventory} 
-            charGachaData={charGachaData} 
+            difficulty={difficulty} 
+            setDifficulty={setDifficulty} 
+            language={language} 
+            setLanguage={setLanguage} 
+            t={t} 
           />
         );
-
-      case 'QUEST': return <PlaceholderView title="クエスト" icon={<FileText size={48}/>} />;
-      case 'FRIEND':
-        if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
-        return <FriendView player={player} inventory={inventory} setInventory={setInventory} onStartChat={handleStartChat} />;
-      case 'MAIL':
-        if (isGuest) return <HomeView player={player} difficulty={difficulty} />;
-        return <MailView player={player} initialTarget={chatTarget} onClose={() => { setChatTarget(null); setActiveView('FRIEND'); }} />;
-      case 'INFO': return <PlaceholderView title="お知らせ" icon={<Megaphone size={48}/>} />;
-      case 'SETTINGS':
-        // ★修正: setDifficulty, difficultyを渡す
-        return <SettingsView player={player} setPlayer={setPlayer} difficulty={difficulty} setDifficulty={setDifficulty} />;
-      default: return <HomeView player={player} difficulty={difficulty} onMoveToDungeon={handleGoToDungeon} />;
+      default: 
+        return <HomeView player={player} difficulty={difficulty} onMoveToDungeon={handleGoToDungeon} {...commonProps} />;
     }
   };
 
@@ -148,6 +167,7 @@ const TownScreen = ({
       <div className="flex-1 relative overflow-hidden shadow-inner">
         {renderContent()}
       </div>
+      {/* サイドメニューにも言語設定を渡す */}
       <MenuSidebar 
         player={player} 
         activeView={activeView} 
@@ -156,6 +176,8 @@ const TownScreen = ({
         difficulty={difficulty} 
         isGuest={isGuest}
         badgeCounts={badgeCounts}
+        language={language}
+        t={t}
       />
     </div>
   );

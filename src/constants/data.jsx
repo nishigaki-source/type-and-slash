@@ -2,6 +2,13 @@ import React from 'react';
 import { Shield, FlaskConical, Clover, Pill, Flame, Wind } from 'lucide-react';
 import { SVGs } from '../components/GameSvgs';
 
+// 言語設定
+export const LANGUAGES = {
+  JA_KANA: { id: 'JA_KANA', label: '日本語（ひらがな）' },
+  JA_KANJI: { id: 'JA_KANJI', label: '日本語（漢字）' },
+  EN: { id: 'EN', label: 'English' }
+};
+
 export const GROWTH = {
   S: { min: 4, max: 6 },
   A: { min: 3, max: 5 },

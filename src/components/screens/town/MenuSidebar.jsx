@@ -3,7 +3,7 @@ import {
   ShoppingBag, Trophy, Users, 
   User, LogOut, Sword, Backpack, 
   ArrowLeftRight, Coins, Swords, Lock,
-  Gift, Mail, Megaphone, Settings, FileText // ★FileTextを追加
+  Gift, Mail, Settings, FileText 
 } from 'lucide-react';
 import { JOBS } from '../../../constants/data';
 
@@ -12,34 +12,48 @@ const MenuButton = ({ icon, label, onClick, active = false, color = "bg-slate-80
   <button 
     onClick={disabled ? null : onClick}
     className={`
-      aspect-square flex flex-col items-center justify-center gap-1 rounded-lg border transition-all duration-200 relative
+      aspect-square flex flex-col items-center justify-center gap-1 rounded-lg border transition-all duration-200 relative px-1
       ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]' : 
         disabled ? 'bg-slate-800/50 border-slate-700/50 text-slate-600 cursor-not-allowed' : 
         `${color} border-slate-700 text-slate-300`}
     `}
-    title={disabled ? "ログインが必要です" : ""}
+    title={disabled ? "Login required" : ""}
   >
     <div className={active ? 'animate-bounce-slow' : ''}>
       {disabled ? <Lock size={20} className="opacity-50"/> : React.cloneElement(icon, { size: 20 })}
     </div>
-    <span className={`text-[10px] font-bold ${disabled ? 'text-slate-600' : ''}`}>{label}</span>
+    {/* 翻訳で文字が長くなっても入りやすいよう text-[9px] に微調整 */}
+    <span className={`text-[9px] sm:text-[10px] font-bold text-center leading-tight ${disabled ? 'text-slate-600' : ''}`}>
+      {label}
+    </span>
     
     {/* 通知バッジ */}
     {badge > 0 && (
-      <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-900 shadow-md animate-bounce">
+      <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-slate-900 shadow-md animate-bounce">
         {badge > 9 ? '9+' : badge}
       </div>
     )}
   </button>
 );
 
-const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, isGuest, badgeCounts }) => {
+const MenuSidebar = ({ 
+  player, 
+  activeView, 
+  setActiveView, 
+  onLogout, 
+  difficulty, 
+  isGuest, 
+  badgeCounts,
+  language, // 現在の言語
+  t         // 翻訳関数
+}) => {
   const JobIll = JOBS[player.job].Illustration;
   const expPercent = player.level > 0 ? Math.min(100, Math.floor((player.exp / (player.level * 100)) * 100)) : 0;
 
-  const diffLabel = difficulty === 'EASY' ? 'かんたん' : difficulty === 'NORMAL' ? 'ふつう' : 'むずかしい';
+  // 難易度ラベルの翻訳
+  const diffLabel = t(`DIFFICULTY_${difficulty}`);
   
-  // バッジ数の取得 (未定義の場合は0)
+  // バッジ数の取得
   const friendBadge = badgeCounts?.friend || 0;
   const mailBadge = badgeCounts?.mail || 0;
 
@@ -53,9 +67,9 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, 
             </div>
             <div className="flex-1 min-w-0">
                <div className="font-bold text-sm truncate">{player.name}</div>
-               <div className="text-xs text-slate-400">Lv.{player.level}</div>
+               <div className="text-xs text-slate-400">{t('LEVEL')}.{player.level}</div>
             </div>
-            <div className="text-xs px-2 py-1 bg-slate-700 rounded border border-slate-600 text-slate-300">
+            <div className="text-[10px] px-2 py-1 bg-slate-700 rounded border border-slate-600 text-slate-300 font-bold">
                {diffLabel}
             </div>
          </div>
@@ -66,7 +80,7 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, 
          </div>
 
          <div className="flex justify-end items-center gap-1 text-yellow-400 font-mono font-bold">
-            <Coins size={14} /> {player.gold.toLocaleString()}
+            <Coins size={14} /> {player.gold.toLocaleString()} G
          </div>
       </div>
 
@@ -77,14 +91,14 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, 
             {/* 1行目 */}
             <MenuButton 
               icon={<Sword />} 
-              label="ダンジョン" 
+              label={t('DUNGEON')} 
               onClick={() => setActiveView('DUNGEON')} 
               active={activeView === 'DUNGEON'} 
               color="bg-red-900/40 hover:bg-red-900/60 border-red-900" 
             />
             <MenuButton 
               icon={<Swords />} 
-              label="アリーナ" 
+              label={t('ARENA')} 
               onClick={() => setActiveView('ARENA')} 
               active={activeView === 'ARENA'} 
               color="bg-purple-900/40 hover:bg-purple-900/60 border-purple-900" 
@@ -92,21 +106,36 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, 
             />
             <MenuButton 
               icon={<Gift />} 
-              label="ガチャ" 
+              label={t('GACHA')} 
               onClick={() => setActiveView('GACHA')} 
               active={activeView === 'GACHA'} 
               color="bg-indigo-900/40 hover:bg-indigo-900/60 border-indigo-900"
             />
 
             {/* 2行目 */}
-            <MenuButton icon={<ShoppingBag />} label="ショップ" onClick={() => setActiveView('SHOP')} active={activeView === 'SHOP'} />
-            <MenuButton icon={<Backpack />} label="アイテム" onClick={() => setActiveView('ITEM')} active={activeView === 'ITEM'} />
-            <MenuButton icon={<FileText />} label="クエスト" onClick={() => setActiveView('QUEST')} active={activeView === 'QUEST'} />
+            <MenuButton 
+              icon={<ShoppingBag />} 
+              label={t('SHOP')} 
+              onClick={() => setActiveView('SHOP')} 
+              active={activeView === 'SHOP'} 
+            />
+            <MenuButton 
+              icon={<Backpack />} 
+              label={t('ITEM')} 
+              onClick={() => setActiveView('ITEM')} 
+              active={activeView === 'ITEM'} 
+            />
+            <MenuButton 
+              icon={<FileText />} 
+              label={t('QUEST')} 
+              onClick={() => setActiveView('QUEST')} 
+              active={activeView === 'QUEST'} 
+            />
 
             {/* 3行目 */}
             <MenuButton 
               icon={<Users />} 
-              label="フレンド" 
+              label={t('FRIEND')} 
               onClick={() => setActiveView('FRIEND')} 
               active={activeView === 'FRIEND'} 
               color="bg-teal-900/40 hover:bg-teal-900/60 border-teal-900"
@@ -115,31 +144,56 @@ const MenuSidebar = ({ player, activeView, setActiveView, onLogout, difficulty, 
             />
             <MenuButton 
               icon={<ArrowLeftRight />} 
-              label="トレード" 
+              label={t('TRADE')} 
               onClick={() => setActiveView('TRADE')} 
               active={activeView === 'TRADE'} 
               color="bg-green-800/40 hover:bg-green-800/60 border-green-900" 
               disabled={isGuest}
             />
-            <MenuButton icon={<User />} label="キャラクタ" onClick={() => setActiveView('STATUS')} active={activeView === 'STATUS'} />
+            <MenuButton 
+              icon={<User />} 
+              label={t('STATUS')} 
+              onClick={() => setActiveView('STATUS')} 
+              active={activeView === 'STATUS'} 
+            />
 
             {/* 4行目 */}
-            <MenuButton icon={<Trophy />} label="実績" onClick={() => setActiveView('ACHIEVEMENT')} active={activeView === 'ACHIEVEMENT'} />
+            <MenuButton 
+              icon={<Trophy />} 
+              label={t('ACHIEVEMENT')} 
+              onClick={() => setActiveView('ACHIEVEMENT')} 
+              active={activeView === 'ACHIEVEMENT'} 
+            />
             <MenuButton 
               icon={<Mail />} 
-              label="メール" 
+              label={t('MAIL')} 
               onClick={() => setActiveView('MAIL')} 
               active={activeView === 'MAIL'} 
               disabled={isGuest}
               badge={mailBadge}
             />
-            <MenuButton icon={<Settings />} label="設定" onClick={() => setActiveView('SETTINGS')} active={activeView === 'SETTINGS'} />
+            <MenuButton 
+              icon={<Settings />} 
+              label={t('SETTINGS')} 
+              onClick={() => setActiveView('SETTINGS')} 
+              active={activeView === 'SETTINGS'} 
+            />
 
          </div>
          
          <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
-           <button onClick={() => setActiveView('HOME')} className={`w-full py-2 rounded text-sm font-bold transition-colors ${activeView === 'HOME' ? 'text-slate-500 cursor-default' : 'text-blue-400 hover:text-blue-300 hover:bg-slate-800'}`}>HOME</button>
-           <button onClick={onLogout} className="w-full py-2 rounded text-sm font-bold text-slate-500 hover:text-red-400 hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"><LogOut size={16}/> ログアウト</button>
+           <button 
+             onClick={() => setActiveView('HOME')} 
+             className={`w-full py-2 rounded text-sm font-bold transition-colors ${activeView === 'HOME' ? 'text-slate-500 cursor-default' : 'text-blue-400 hover:text-blue-300 hover:bg-slate-800'}`}
+           >
+             {t('HOME')}
+           </button>
+           <button 
+             onClick={onLogout} 
+             className="w-full py-2 rounded text-sm font-bold text-slate-500 hover:text-red-400 hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+           >
+             <LogOut size={16}/> {t('LOGOUT')}
+           </button>
          </div>
       </div>
     </div>

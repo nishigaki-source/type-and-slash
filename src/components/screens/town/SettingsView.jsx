@@ -1,10 +1,19 @@
 import React, { useState } from 'react';
-import { Settings, User, LogOut, Shield, HardDrive, Check, Copy } from 'lucide-react';
-import { JOBS } from '../../../constants/data';
-import { doc, updateDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
+import { Settings, User, LogOut, Shield, HardDrive, Check, Copy, Languages } from 'lucide-react';
+import { JOBS, LANGUAGES } from '../../../constants/data'; // LANGUAGESをインポートに追加
+import { doc, writeBatch } from 'firebase/firestore';
 import { db, GAME_APP_ID } from '../../../lib/firebase';
 
-const SettingsView = ({ player, setPlayer, difficulty, setDifficulty, onLogout }) => {
+const SettingsView = ({ 
+  player, 
+  setPlayer, 
+  difficulty, 
+  setDifficulty, 
+  onLogout,
+  language,    // 追加: 現在の言語設定
+  setLanguage, // 追加: 言語設定更新関数
+  t            // 追加: 翻訳関数
+}) => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
   const [copied, setCopied] = useState(false);
@@ -18,7 +27,7 @@ const SettingsView = ({ player, setPlayer, difficulty, setDifficulty, onLogout }
   const saveProfileIcon = async (jobId) => {
     if (isSaving) return;
     setIsSaving(true);
-    setSaveStatus('保存中...');
+    setSaveStatus(t('SAVING') || '保存中...');
     
     try {
       const batch = writeBatch(db);
@@ -29,34 +38,43 @@ const SettingsView = ({ player, setPlayer, difficulty, setDifficulty, onLogout }
         "player.profileJob": jobId
       });
 
-      // 2. (オプション) フレンド側のリストに表示される自分のアイコン情報を同期したい場合
-      // 本来はMailView側で最新のUserデータを参照するのが正解ですが、
-      // 念のため自分の基本プロフィールとして profileJob を保存します。
-      
       await batch.commit();
       
       setPlayer(prev => ({ ...prev, profileJob: jobId }));
-      setSaveStatus('アイコンを更新しました！');
+      setSaveStatus(t('ICON_UPDATED') || 'アイコンを更新しました！');
       setTimeout(() => setSaveStatus(''), 2000);
     } catch (e) {
       console.error("Icon update error:", e);
-      setSaveStatus('更新に失敗しました');
+      setSaveStatus(t('SAVE_ERROR') || '更新に失敗しました');
     } finally {
       setIsSaving(false);
     }
   };
 
+  // 難易度設定のリスト（ラベルと説明を翻訳対応）
   const difficultyLevels = [
-    { key: 'EASY', label: 'かんたん', desc: 'タイピングに慣れていない方向け。短い単語やひらがな中心に出題されます。' },
-    { key: 'NORMAL', label: 'ふつう', desc: '一般的な難易度。漢字や日常的な単語、少し長めの文章が出題されます。' },
-    { key: 'HARD', label: 'むずかしい', desc: '熟練者向け。英単語、記号、プログラミング構文など複雑な入力が求められます。' }
+    { 
+      key: 'EASY', 
+      label: t('DIFFICULTY_EASY'), 
+      desc: t('DESC_EASY') || 'タイピングに慣れていない方向け。短い単語やひらがな中心に出題されます。' 
+    },
+    { 
+      key: 'NORMAL', 
+      label: t('DIFFICULTY_NORMAL'), 
+      desc: t('DESC_NORMAL') || '一般的な難易度。漢字や日常的な単語、少し長めの文章が出題されます。' 
+    },
+    { 
+      key: 'HARD', 
+      label: t('DIFFICULTY_HARD'), 
+      desc: t('DESC_HARD') || '熟練者向け。英単語、記号、プログラミング構文など複雑な入力が求められます。' 
+    }
   ];
 
   return (
     <div className="h-full flex flex-col bg-white/90 backdrop-blur-md animate-fade-in p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-          <Settings className="text-blue-600" /> 設定
+          <Settings className="text-blue-600" /> {t('SETTINGS')}
         </h2>
         {saveStatus && (
           <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full animate-pulse">
@@ -66,9 +84,10 @@ const SettingsView = ({ player, setPlayer, difficulty, setDifficulty, onLogout }
       </div>
 
       <div className="space-y-6 overflow-y-auto pb-10 no-scrollbar">
+        {/* プロフィールアイコン選択 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
-            <User size={16} /> プロフィールアイコン選択
+            <User size={16} /> {t('SELECT_ICON') || 'プロフィールアイコン選択'}
           </h3>
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-4 justify-items-center">
             {Object.keys(JOBS).map((jobId) => {
@@ -98,13 +117,14 @@ const SettingsView = ({ player, setPlayer, difficulty, setDifficulty, onLogout }
           </div>
         </div>
 
+        {/* アカウント情報 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
-            <Shield size={16} /> アカウント情報
+            <Shield size={16} /> {t('ACCOUNT_INFO') || 'アカウント情報'}
           </h3>
           <div className="space-y-3">
             <div className="space-y-1">
-              <span className="text-xs text-slate-400 font-bold ml-1">プレイヤーID</span>
+              <span className="text-xs text-slate-400 font-bold ml-1">{t('PLAYER_ID') || 'プレイヤーID'}</span>
               <div className="flex gap-2">
                 <div className="flex-1 p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm font-mono text-slate-800 break-all">
                   {player.id}
@@ -122,12 +142,38 @@ const SettingsView = ({ player, setPlayer, difficulty, setDifficulty, onLogout }
           </div>
         </div>
 
+        {/* 言語設定 (Language) */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
-            <HardDrive size={16} /> ゲームプレイ設定
+            <Languages size={16} /> {t('LANGUAGE_SETTINGS') || '言語設定 (Language)'}
+          </h3>
+          <div className="grid grid-cols-1 gap-2">
+            {Object.values(LANGUAGES).map((lang) => (
+              <button
+                key={lang.id}
+                onClick={() => setLanguage(lang.id)}
+                className={`p-3 text-left rounded-xl border-2 transition-all ${
+                  language === lang.id ? 'border-blue-500 bg-blue-50' : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span className={`font-bold text-sm ${language === lang.id ? 'text-blue-600' : 'text-slate-700'}`}>
+                    {lang.label}
+                  </span>
+                  {language === lang.id && <Check size={16} className="text-blue-600" />}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ゲームプレイ設定 (難易度) */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-500 mb-4 flex items-center gap-2">
+            <HardDrive size={16} /> {t('GAMEPLAY_SETTINGS') || 'ゲームプレイ設定'}
           </h3>
           <div className="space-y-4">
-            <label className="text-xs text-slate-400 block font-bold ml-1">ゲーム難易度</label>
+            <label className="text-xs text-slate-400 block font-bold ml-1">{t('GAME_DIFFICULTY') || 'ゲーム難易度'}</label>
             <div className="grid grid-cols-1 gap-3">
               {difficultyLevels.map((level) => (
                 <button
@@ -154,11 +200,12 @@ const SettingsView = ({ player, setPlayer, difficulty, setDifficulty, onLogout }
           </div>
         </div>
 
+        {/* ログアウトボタン */}
         <button
           onClick={onLogout}
           className="w-full p-4 bg-red-50 text-red-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-100 transition-colors border border-red-100 shadow-sm"
         >
-          <LogOut size={18} /> ログアウト
+          <LogOut size={18} /> {t('LOGOUT')}
         </button>
       </div>
     </div>

@@ -50,6 +50,9 @@ export default function TypingGame() {
   const townBgmRef = useRef(null);
   const battleBgmRef = useRef(null); // ★バトル用BGMのRef
 
+  const [uiTextData, setUiTextData] = useState({});
+  const [language, setLanguage] = useState('JA_KANJI');
+
   useEffect(() => {
     // 1. Audioオブジェクトの初期化
     if (!bgmRef.current) {
@@ -73,11 +76,11 @@ export default function TypingGame() {
     townBgmRef.current.muted = isMuted;
     battleBgmRef.current.muted = isMuted;
 
-    const isMainTitleActive = gameState === 'TITLE' || showAuth;
+    const isMainTitleActive = gameState === 'TITLE' || gameState === 'CHAR_CREATE' || showAuth;
     const isTownActive = gameState === 'TOWN';
     const isBattleActive = gameState === 'BATTLE';
 
-    // 排他的な再生ロジック
+    // 再生ロジック
     if (isMainTitleActive) {
       if (townBgmRef.current) townBgmRef.current.pause();
       if (battleBgmRef.current) battleBgmRef.current.pause();
@@ -139,6 +142,39 @@ export default function TypingGame() {
     return () => unsubscribe();
   }, [isGuest]);
 
+  // 言語データ
+    useEffect(() => {
+      const fetchUIText = async () => {
+        // UIテキスト用スプレッドシートのCSV URL
+        const UI_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTfEgWNxGwbva_n3iSREx58_lkbt6LqGAHrRJJSSGcoahWRV71wTzXtIDYNFL44RqIVj3ZRiBd3j9bt/pub?gid=1940138879&single=true&output=csv";
+        try {
+          const response = await fetch(`${UI_CSV_URL}&cache_bust=${Date.now()}`);
+          const csvText = await response.text();
+          const rows = csvText.split(/\r?\n/).filter(row => row.trim() !== "").slice(1);
+          
+          const mapping = {};
+          rows.forEach(row => {
+            const [key, kanji, kana, en] = row.split(',');
+            mapping[key] = {
+              JA_KANJI: kanji,
+              JA_KANA: kana,
+              EN: en
+            };
+          });
+          setUiTextData(mapping);
+        } catch (e) {
+          console.error("UIテキストの読み込み失敗:", e);
+        }
+      };
+      fetchUIText();
+    }, []);
+
+    // テキスト取得用のヘルパー関数を定義
+    const t = (key) => {
+      if (!uiTextData[key]) return key; // データがない場合はキーをそのまま返す
+      return uiTextData[key][language] || uiTextData[key]['JA_KANJI'];
+    };
+
   // データロード
   useEffect(() => {
     const loadData = async () => {
@@ -155,13 +191,17 @@ export default function TypingGame() {
             if (data.shopItems && data.shopItems.length > 0) {
                 setShopItems(data.shopItems);
             }
-            // ★保存されていた難易度を復元 (なければEASY)
+            // 保存されていた難易度を復元
             if (data.difficulty) {
               setDifficulty(data.difficulty);
             }
+            // ★追加：保存されていた言語設定を復元 (なければ初期値 'JA_KANJI')
+            if (data.language) {
+              setLanguage(data.language);
+            }
             setGameState('TITLE'); 
           } else {
-             setGameState('CHAR_CREATE');
+            setGameState('CHAR_CREATE');
           }
         } catch (e) {
           console.error("Load Error:", e);
@@ -171,15 +211,22 @@ export default function TypingGame() {
     };
     
     loadData();
-  }, [fbUser, isGuest, gameState]);
+  }, [fbUser, isGuest, gameState]); // 言語Stateの初期化が別途必要です
 
   // データセーブ
   useEffect(() => {
     if (player && fbUser && !isGuest) {
       const saveData = async () => {
         try {
-          // ★difficulty も保存データに含める
-          const data = { player, inventory, equipped, shopItems, difficulty };
+          // ★修正：セーブデータに language を追加
+          const data = { 
+            player, 
+            inventory, 
+            equipped, 
+            shopItems, 
+            difficulty, 
+            language // ここを追加
+          };
           const docRef = doc(db, 'artifacts', GAME_APP_ID, 'users', fbUser.uid, 'saveData', 'current');
           await setDoc(docRef, data);
         } catch (e) {
@@ -188,7 +235,7 @@ export default function TypingGame() {
       };
       saveData();
     }
-  }, [player, inventory, equipped, shopItems, difficulty, fbUser, isGuest]);
+  }, [player, inventory, equipped, shopItems, difficulty, language, fbUser, isGuest]); // language を依存配列に追加
 
   const refreshShop = useCallback(() => {
      if(!player) return;
@@ -706,84 +753,81 @@ const handleCreateChar = (formData) => {
   }
 
   return (
-    <div className="w-full h-screen bg-slate-50 overflow-hidden font-sans select-none relative">
-      <style>{`
-        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        .animate-fade-in { animation: fade-in 0.5s ease-out; }
-        @keyframes bounce-slow { 0%, 100% { transform: translateY(-5%); } 50% { transform: translateY(5%); } }
-        .animate-bounce-slow { animation: bounce-slow 3s infinite ease-in-out; }
-      `}</style>
-      
-      {gameState === 'TITLE' && 
-        <TitleScreen 
-          player={player} 
-          onStartNew={() => setShowAuth(true)} 
-          onResume={() => setGameState('TOWN')} 
-          difficulty={difficulty} 
-          setDifficulty={setDifficulty}
-          onGuestMultiplayer={handleGuestMultiplayer} 
-          onDelete={async () => {
-             if(window.confirm('本当にデータを削除しますか？（復元できません）')) {
-                if (fbUser) {
-                   try {
-                     const docRef = doc(db, 'artifacts', GAME_APP_ID, 'users', fbUser.uid, 'saveData', 'current');
-                     await deleteDoc(docRef);
-                     setPlayer(null);
-                     setInventory([]);
-                     setEquipped({});
-                     alert("データを削除しました。");
-                   } catch (e) {
-                     console.error("Delete Error:", e);
-                   }
-                } else {
-                   setPlayer(null);
-                }
-             }
-          }}
-        />
-      }
-      {gameState === 'CHAR_CREATE' && <CharCreateScreen onCreate={handleCreateChar} onBack={handleLogout} />}
-      
-      {gameState === 'TOWN' && player && 
-        <TownScreen 
-          player={player} 
-          inventory={inventory} 
-          equipped={equipped} 
-          shopItems={shopItems}
-          setShopItems={setShopItems}
-          setPlayer={setPlayer}
-          setInventory={setInventory}
-          onEquip={handleEquip} 
-          onUnequip={handleUnequip} 
-          onStartBattle={startBattle} 
-          onLogout={handleLogout} 
-          difficulty={difficulty} 
-          setDifficulty={setDifficulty} 
-          onStartArena={handleStartArena} 
-          isGuest={isGuest} 
-          charGachaData={charGachaData}
-        />
-      }
+  <div className="w-full h-screen bg-slate-50 overflow-hidden font-sans select-none relative">
+    <style>{`
+      @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+      .animate-fade-in { animation: fade-in 0.5s ease-out; }
+      @keyframes bounce-slow { 0%, 100% { transform: translateY(-5%); } 50% { transform: translateY(5%); } }
+      .animate-bounce-slow { animation: bounce-slow 3s infinite ease-in-out; }
+    `}</style>
     
-      {gameState === 'BATTLE' && battleState && player && 
-        <BattleScreen 
-          battleState={battleState} 
-          setBattleState={setBattleState} 
-          player={player} 
-          equipped={equipped} 
-          inventory={inventory} 
-          setInventory={setInventory} 
-          onWin={handleWin} 
-          onLose={handleLose} 
-          onRetreat={handleRetreat}
-          difficulty={difficulty} 
-        />
-      }
+    {/* タイトル画面 */}
+    {gameState === 'TITLE' && 
+      <TitleScreen 
+        player={player} 
+        onStartNew={() => setShowAuth(true)} 
+        onResume={() => setGameState('TOWN')} 
+        difficulty={difficulty} 
+        setDifficulty={setDifficulty}
+        onGuestMultiplayer={handleGuestMultiplayer} 
+        // 必要に応じて TitleScreen にも t={t} を渡すとタイトルも多言語化できます
+        t={t}
+      />
+    }
+
+    {/* キャラクター作成画面 */}
+    {gameState === 'CHAR_CREATE' && <CharCreateScreen onCreate={handleCreateChar} onBack={handleLogout} t={t} />}
+    
+    {/* 町画面 (ここが最重要) */}
+    {gameState === 'TOWN' && player && 
+      <TownScreen 
+        player={player} 
+        inventory={inventory} 
+        equipped={equipped} 
+        shopItems={shopItems}
+        setShopItems={setShopItems}
+        setPlayer={setPlayer}
+        setInventory={setInventory}
+        onEquip={handleEquip} 
+        onUnequip={handleUnequip} 
+        onStartBattle={startBattle} 
+        onLogout={handleLogout} 
+        difficulty={difficulty} 
+        setDifficulty={setDifficulty} 
+        onStartArena={handleStartArena} 
+        isGuest={isGuest} 
+        charGachaData={charGachaData}
+        // ★★★ 以下の3行が確実に記述されているか確認してください ★★★
+        language={language}
+        setLanguage={setLanguage}
+        t={t} 
+      />
+    }
+  
+    {/* バトル画面 */}
+    {gameState === 'BATTLE' && battleState && player && 
+      <BattleScreen 
+        battleState={battleState} 
+        setBattleState={setBattleState} 
+        player={player} 
+        equipped={equipped} 
+        inventory={inventory} 
+        setInventory={setInventory} 
+        onWin={handleWin} 
+        onLose={handleLose} 
+        onRetreat={handleRetreat}
+        difficulty={difficulty} 
+        // バトル画面内での「帰還」ボタンなどのために渡す
+        language={language}
+        t={t}
+      />
+    }
 
       {gameState === 'TREASURE' && (
         <TreasureSelectionModal 
           chests={treasureChests}
           onSelect={handleChestSelect}
+          t={t}
         />
       )}
       
@@ -805,6 +849,7 @@ const handleCreateChar = (formData) => {
               setGameState('TOWN');
             }
           }}
+          t={t}
         />
       )}
 
@@ -816,6 +861,7 @@ const handleCreateChar = (formData) => {
           equipped={equipped}
           userId={player.id || fbUser?.uid} 
           onFinish={handleMultiFinish} 
+          t={t}
         />
       )}
 
