@@ -99,16 +99,25 @@ export default function TypingGame() {
     }
   };
 
-  const handleStoryAction = (uiType, payload = null) => {
-  const type = uiType ? uiType.trim() : "";
+const handleStoryAction = (uiType, payload = null) => {
+  if (!uiType) {
+    handleNextStory();
+    return;
+  }
+
+  const type = uiType.replace(/\s+/g, "").toUpperCase();
 
   switch (type) {
     case 'INPUT_NAME':
-      // payload に入力された名前が入ってくる
       if (payload) {
         setTempPlayerName(payload);
         handleNextStory();
       }
+      break;
+
+    case 'SELECT_ORIGIN':
+      // 現在は仮の実装。必要に応じてステート保存処理を追加
+      handleNextStory();
       break;
 
     case 'SELECT_JOB':
@@ -117,6 +126,7 @@ export default function TypingGame() {
       break;
 
     default:
+      // EFFECT_LIT や EFFECT_SHAKE はここを通って次のシーンへ
       handleNextStory();
       break;
   }

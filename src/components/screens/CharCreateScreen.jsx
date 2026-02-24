@@ -52,7 +52,7 @@ const RelationDiagram = () => (
 );
 
 const CharCreateScreen = ({ onCreate, onBack }) => {
-  const [form, setForm] = useState({ name: '冒険者', job: 'FIGHTER', race: 'HUMAN', gender: 'MALE' });
+  const [form, setForm] = useState({ name: '', job: 'FIGHTER', race: 'HUMAN', gender: 'MALE' });
 
   const handleRandomName = () => {
     setForm({...form, name: generateRandomName()});

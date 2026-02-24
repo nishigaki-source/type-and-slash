@@ -79,21 +79,25 @@ export const useGameData = () => {
         const storyRows = (await storyRes.text()).split(/\r?\n/).filter(r => r.trim()).slice(1);
         
         const storyData = storyRows.map(r => {
-          const c = r.split(',');
-          return {
-            id: c[0],
-            scene: c[1],
-            name: c[2],
-            bg: c[3],
-            charImg: c[4],
-            text: {
-              JA_KANJI: c[5],
-              JA_HIRA: c[6], // ひらがな列
-              EN: c[7]
-            },
-            uiType: c[8]?.trim() || null // INPUT_NAME, SELECT_JOBなど
-          };
-        });
+        // カンマ区切りを安全に分割する正規表現（引用符内のカンマを無視）
+        const c = r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        const cl = (v) => v?.replace(/^"|"$/g, '').trim() || ""; // 前後の引用符と空白を消す
+
+        return {
+          id: cl(c[0]),
+          scene: cl(c[1]),
+          name: cl(c[2]),
+          bg: cl(c[3]),
+          charImg: cl(c[4]),
+          text: {
+            JA_KANJI: cl(c[5]),
+            JA_HIRA: cl(c[6]),
+            EN: cl(c[7])
+          },
+          // ここが重要：9番目の要素（インデックス8）をuiTypeとして取得
+          uiType: c[8] ? cl(c[8]) : null 
+        };
+      });
         setOpeningStory(storyData);
 
     };

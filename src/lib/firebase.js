@@ -11,9 +11,7 @@ const firebaseConfig = {
   appId: "1:898114139190:web:9b7adeb1a582c84c821497"
 };
 
-// ↓ この行が抜けている可能性が高いです
 export const GAME_APP_ID = "type-and-slash-v1";
-
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
