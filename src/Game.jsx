@@ -31,6 +31,7 @@ import ResultModal from './components/ui/ResultModal';
 import TreasureSelectionModal from './components/ui/TreasureSelectionModal';
 import LobbyScreen from './components/screens/LobbyScreen';
 import MultiplayerBattleScreen from './components/screens/MultiplayerBattleScreen';
+import { StoryModal } from './components/ui/StoryModal'; // ストーリー用モーダル
 
 export default function TypingGame() {
   // 1. ゲームの基本ステートとロジックを hook から取得
@@ -63,10 +64,15 @@ export default function TypingGame() {
   } = gameStateObj;
 
   // 2. 外部データ（CSV）の取得ロジックを hook から取得
-  const { uiTextData, floorWords, charGachaData, dataLoaded } = useGameData();
+  // openingStory (スプレッドシートデータ) を取得
+  const { uiTextData, floorWords, charGachaData, openingStory, dataLoaded } = useGameData();
 
   // 3. 音声制御ロジックを hook で実行
   useAudio(gameState, showAuth, isMuted, battleState);
+
+  // --- 追加ステート: ストーリー進行用 ---
+  const [storyStep, setStoryStep] = useState(0);
+  const [tempPlayerName, setTempPlayerName] = useState("");
 
   // 翻訳ヘルパー関数
   const t = useCallback((key) => {
@@ -86,109 +92,105 @@ export default function TypingGame() {
     saveUserData();
   }, [saveUserData]);
 
-  // 戦闘開始処理
-  // src/Game.jsx 内の startBattle 関数を修正
-
-const startBattle = (stage) => {
-  if (!MONSTER_DATA || Object.keys(MONSTER_DATA).length === 0) return;
-  const eff = calculateEffectiveStats(player, equipped);
-  const wordPool = floorWords[difficulty]?.[stage] || floorWords[difficulty]?.["1"] || [{ display: "Ready", romaji: "ready" }];
-  const enemies = [];
-  const intervalBase = Math.max(1000, 5000 - ((stage - 1) * 40));
-
-  // --- 1. 特定階層のボスを指定するテーブル ---
-  const FIXED_BOSSES = {
-    10: "Cerberus", 
-    20: "Basilisk", 
-    30: "Goblin_Lord", 
-    40: "Orc_King", 
-    50: "Ifrit",
-    60: "Dragon", 
-    70: "Blood_Medusa",
-    80: "Minotaur_General",
-    90: "Fire_Dragon",
-    91: "Goblin_Emperor",
-    92: "Orc_Emperor",
-    93: "Demon_Lord", 
-    94: "Bol-Storm", 
-    95: "Gal-Fen", 
-    96: "Val-Terra", 
-    97: "Abyss-Minos", 
-    98: "Aza-Tul", 
-    99: "Rag-Blood", 
-    100: "Ragna-Inferno" 
+  // --- ストーリー進行ロジック ---
+  const handleNextStory = () => {
+    if (storyStep < openingStory.length - 1) {
+      setStoryStep(storyStep + 1);
+    }
   };
 
-  const isBossFloor = (stage % 10 === 0) || (stage >= 91 && stage <= 100);
+  const handleStoryAction = (uiType, payload = null) => {
+  const type = uiType ? uiType.trim() : "";
 
-  for (let i = 0; i < 10; i++) {
-    const isBoss = (i === 9) && isBossFloor;
-    let mData;
+  switch (type) {
+    case 'INPUT_NAME':
+      // payload に入力された名前が入ってくる
+      if (payload) {
+        setTempPlayerName(payload);
+        handleNextStory();
+      }
+      break;
 
-    if (isBoss) {
-      // --- 2. 特定のボスが指定されているかチェック ---
-      const fixedBossKey = FIXED_BOSSES[stage];
-      
-      if (fixedBossKey && MONSTER_DATA[fixedBossKey]) {
-        // 指定されたボスを呼び出す
-        mData = MONSTER_DATA[fixedBossKey];
+    case 'SELECT_JOB':
+    case 'START_GAME':
+      setGameState('CHAR_CREATE');
+      break;
+
+    default:
+      handleNextStory();
+      break;
+  }
+};
+
+  // 戦闘開始処理
+  const startBattle = (stage) => {
+    if (!MONSTER_DATA || Object.keys(MONSTER_DATA).length === 0) return;
+    const eff = calculateEffectiveStats(player, equipped);
+    const wordPool = floorWords[difficulty]?.[stage] || floorWords[difficulty]?.["1"] || [{ display: "Ready", romaji: "ready" }];
+    const enemies = [];
+    const intervalBase = Math.max(1000, 5000 - ((stage - 1) * 40));
+
+    const FIXED_BOSSES = {
+      10: "Cerberus", 20: "Basilisk", 30: "Goblin_Lord", 40: "Orc_King", 50: "Ifrit",
+      60: "Dragon", 70: "Blood_Medusa", 80: "Minotaur_General", 90: "Fire_Dragon",
+      91: "Goblin_Emperor", 92: "Orc_Emperor", 93: "Demon_Lord", 94: "Bol-Storm",
+      95: "Gal-Fen", 96: "Val-Terra", 97: "Abyss-Minos", 98: "Aza-Tul", 99: "Rag-Blood", 100: "Ragna-Inferno" 
+    };
+
+    const isBossFloor = (stage % 10 === 0) || (stage >= 91 && stage <= 100);
+
+    for (let i = 0; i < 10; i++) {
+      const isBoss = (i === 9) && isBossFloor;
+      let mData;
+      if (isBoss) {
+        const fixedBossKey = FIXED_BOSSES[stage];
+        if (fixedBossKey && MONSTER_DATA[fixedBossKey]) {
+          mData = MONSTER_DATA[fixedBossKey];
+        } else {
+          const avKeys = Object.keys(MONSTER_DATA).filter(k => {
+            const m = MONSTER_DATA[k];
+            return Number(stage) >= m.minFloor && Number(stage) <= m.maxFloor && m.isBossOnly;
+          });
+          mData = MONSTER_DATA[avKeys[Math.floor(Math.random() * avKeys.length)] || Object.keys(MONSTER_DATA)[0]];
+        }
       } else {
-        // 指定がない場合は、その階層の範囲内からランダムにボスを抽選
         const avKeys = Object.keys(MONSTER_DATA).filter(k => {
           const m = MONSTER_DATA[k];
-          return Number(stage) >= m.minFloor && Number(stage) <= m.maxFloor && m.isBossOnly;
+          return Number(stage) >= m.minFloor && Number(stage) <= m.maxFloor && !m.isBossOnly;
         });
         mData = MONSTER_DATA[avKeys[Math.floor(Math.random() * avKeys.length)] || Object.keys(MONSTER_DATA)[0]];
       }
-    } else {
-      // 通常の敵（i < 9 の時）の抽選
-      const avKeys = Object.keys(MONSTER_DATA).filter(k => {
-        const m = MONSTER_DATA[k];
-        return Number(stage) >= m.minFloor && Number(stage) <= m.maxFloor && !m.isBossOnly;
-      });
-      mData = MONSTER_DATA[avKeys[Math.floor(Math.random() * avKeys.length)] || Object.keys(MONSTER_DATA)[0]];
-    }
 
-    // --- 3. 敵データの生成 ---
-    enemies.push({
-      id: generateId(),
-      name: isBoss ? `BOSS: ${mData.name}` : mData.name,
-      imageId: mData.imageId,
-      type: mData.key,
-      hp: mData.hp,
-      maxHp: mData.hp,
-      atk: mData.atk,
-      word: wordPool[Math.floor(Math.random() * wordPool.length)],
-      isBoss,
-      attackInterval: isBoss ? Math.max(800, intervalBase * 0.75) : intervalBase,
-      currentAttackGauge: 0
-    });
-  }
+      enemies.push({
+        id: generateId(),
+        name: isBoss ? `BOSS: ${mData.name}` : mData.name,
+        imageId: mData.imageId,
+        type: mData.key,
+        hp: mData.hp,
+        maxHp: mData.hp,
+        atk: mData.atk,
+        word: wordPool[Math.floor(Math.random() * wordPool.length)],
+        isBoss,
+        attackInterval: isBoss ? Math.max(800, intervalBase * 0.75) : intervalBase,
+        currentAttackGauge: 0
+      });
+    }
   
     const currentZone = DIFFICULTY_SETTINGS[difficulty].zones.find(z => stage >= z.range[0] && stage <= z.range[1]) || DIFFICULTY_SETTINGS[difficulty].zones[0];
     
     setBattleState({ 
-      stage, 
-      zoneName: currentZone.name, 
-      enemies, 
-      currentEnemyIndex: 0, 
-      playerHp: eff.battle.maxHp, 
-      playerMaxHp: eff.battle.maxHp, 
+      stage, zoneName: currentZone.name, enemies, currentEnemyIndex: 0, 
+      playerHp: eff.battle.maxHp, playerMaxHp: eff.battle.maxHp, 
       log: [`${currentZone.name} (B${stage}F) ${t('BATTLE_START') || 'に突入！'}`], 
-      isOver: false, 
-      lastTick: Date.now(), 
-      isBossDefeated: false, 
-      lastDamageType: null, 
-      lastDamageTime: 0, 
+      isOver: false, lastTick: Date.now(), isBossDefeated: false, 
+      lastDamageType: null, lastDamageTime: 0, 
       statusAilments: { poison: false, paralysis: false }, 
       buffs: { str: 0, vit: 0, agi: 0, dex: 0 },
-      // 攻撃力を固定にする場合はここに定義するか、BattleScreen側で参照します
-      monsterAtk: 10 // 例：モンスターの攻撃力を一律10に固定
+      monsterAtk: 10
     });
     setGameState('BATTLE');
   };
 
-  // 勝利処理（宝箱選択へ）
   const handleWin = (stage, resultData = {}) => {
     const { clearTime = 0, typeCount = 0, missCount = 0, missedWords = {}, missedKeys = {} } = resultData;
     const score = calculateScore(stage, clearTime, missCount);
@@ -201,7 +203,6 @@ const startBattle = (stage) => {
     setGameState('TREASURE');
   };
 
-  // 宝箱選択完了後の報酬付与
   const handleChestSelect = (selectedChest) => {
     if (!tempResultData) return;
     const equipment = openTreasureChest(selectedChest, player.level, player.job);
@@ -262,6 +263,8 @@ const startBattle = (stage) => {
      setIsGuest(false);
      setGameState('TITLE'); 
      setShowAuth(false);
+     setStoryStep(0); // ストーリー進行をリセット
+     setTempPlayerName("");
   };
 
   const handleMultiFinish = (result, stats) => {
@@ -271,7 +274,6 @@ const startBattle = (stage) => {
       newPlayer.records.totalTypes = (newPlayer.records.totalTypes || 0) + stats.typeCount;
       newPlayer.records.totalMiss = (newPlayer.records.totalMiss || 0) + stats.missCount;
     }
-    // アリーナポイント計算などは元のロジックを維持
     setPlayer(newPlayer);
     setGameState(isArenaMode ? 'TOWN' : 'LOBBY');
   };
@@ -300,7 +302,25 @@ const startBattle = (stage) => {
         />
       }
 
-      {gameState === 'CHAR_CREATE' && <CharCreateScreen onCreate={handleCreateChar} onBack={handleLogout} t={t} />}
+      {/* --- ストーリー表示シーン --- */}
+      {gameState === 'STORY' && openingStory.length > 0 && (
+        <StoryModal 
+          data={openingStory[storyStep]} 
+          language={language} 
+          playerName={tempPlayerName}
+          onNext={handleNextStory} 
+          onAction={handleStoryAction}
+        />
+      )}
+
+      {gameState === 'CHAR_CREATE' && (
+        <CharCreateScreen 
+          initialName={tempPlayerName} // ストーリーで入力した名前を渡す
+          onCreate={handleCreateChar} 
+          onBack={handleLogout} 
+          t={t} 
+        />
+      )}
       
       {gameState === 'TOWN' && player && 
         <TownScreen 

@@ -6,6 +6,7 @@ export const useGameData = () => {
   const [floorWords, setFloorWords] = useState({ EASY: {}, NORMAL: {}, HARD: {} });
   const [charGachaData, setCharGachaData] = useState([]);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [openingStory, setOpeningStory] = useState([]); // これを追加
 
   useEffect(() => {
     const fetchData = async () => {
@@ -71,9 +72,33 @@ export const useGameData = () => {
         setCharGachaData(gachaData);
         setDataLoaded(true);
       } catch (e) { console.error("Data load failed", e); }
+
+      // 5. オープニングストーリーの読み込み
+        const STORY_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbDXCCUKdMlC10Z9ccG7AyGjps4VOuChiuOBQVTMGzE5B2LGl50UwRXyYpQ7eDH2YvUUWOdYpPYLKV/pub?gid=814494594&single=true&output=csv"; 
+        const storyRes = await fetch(`${STORY_URL}&cache_bust=${Date.now()}`);
+        const storyRows = (await storyRes.text()).split(/\r?\n/).filter(r => r.trim()).slice(1);
+        
+        const storyData = storyRows.map(r => {
+          const c = r.split(',');
+          return {
+            id: c[0],
+            scene: c[1],
+            name: c[2],
+            bg: c[3],
+            charImg: c[4],
+            text: {
+              JA_KANJI: c[5],
+              JA_HIRA: c[6], // ひらがな列
+              EN: c[7]
+            },
+            uiType: c[8]?.trim() || null // INPUT_NAME, SELECT_JOBなど
+          };
+        });
+        setOpeningStory(storyData);
+
     };
     fetchData();
   }, []);
 
-  return { uiTextData, floorWords, charGachaData, dataLoaded };
+return { uiTextData, floorWords, charGachaData, openingStory, dataLoaded }; 
 };

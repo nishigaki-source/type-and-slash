@@ -65,7 +65,8 @@ export const useGameState = () => {
         if (data.language) setLanguage(data.language);
         setGameState('TITLE'); 
       } else {
-        setGameState('CHAR_CREATE');
+        // 新規ユーザー：登録して開始の後にストーリーを表示するため、ステートを変更
+        setGameState('STORY'); 
       }
     } catch (e) {
       console.error("Load Error:", e);
@@ -86,7 +87,7 @@ export const useGameState = () => {
     }
   }, [player, inventory, equipped, shopItems, difficulty, language, fbUser, isGuest]);
 
-  // ゲストログイン (移植)
+  // ゲストログイン
   const handleGuestStart = async () => {
     try {
       if (!auth.currentUser) await signInAnonymously(auth);
@@ -97,13 +98,14 @@ export const useGameState = () => {
       setShopItems([]);
       setDifficulty('EASY');
       setShowAuth(false);
+      // ゲストはストーリーをスキップして直接キャラクター作成へ
       setGameState('CHAR_CREATE'); 
     } catch (e) {
       alert("Guest login failed");
     }
   };
 
-  // マルチプレイ用ゲストログイン (移植)
+  // マルチプレイ用ゲストログイン
   const handleGuestMultiplayer = async () => {
     try {
       let currentUid = auth.currentUser?.uid;
@@ -129,7 +131,7 @@ export const useGameState = () => {
     }
   };
 
-  // 装備変更 (移植)
+  // 装備変更
   const handleEquip = (item) => {
     const slot = item.type === 'WEAPON' ? 'WEAPON' : item.type;
     setEquipped(prev => ({ ...prev, [slot]: item }));
@@ -174,7 +176,7 @@ export const useGameState = () => {
     setGameState('TOWN');
   };
 
-  // 部屋参加・アリーナ開始 (移植)
+  // 部屋参加・アリーナ開始
   const handleJoinRoom = (roomId, role, isArena = false) => {
     setMultiplayerRoomId(roomId);
     setMultiplayerRole(role);
